@@ -1,0 +1,26 @@
+fastapi
+uvicorn
+uvicorn[standard]
+gunicorn
+pydantic
+pydantic-settings
+qdrant-client
+httpx
+python-multipart
+loguru
+openai
+python-jose[cryptography]
+passlib[bcrypt]
+# OpenVoice related
+scipy
+librosa
+# Document parsing
+python-docx
+pypdf
+
+
+
+
+
+
+
