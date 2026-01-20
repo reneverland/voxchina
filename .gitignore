@@ -39,6 +39,10 @@ __pycache__/
 venv/
 env/
 
+# Hugging Face cache
+.cache/
+backend/.cache/
+
 # Audio files (可选，如果音频文件太大)
 # static/audio/*.mp3
 # static/audio/*.wav
