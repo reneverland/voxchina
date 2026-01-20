@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o"  # Default model (upgraded to gpt-4o)
     
     # OpenAI Config
-    OPENAI_API_KEY: str = "YOUR_API_KEY_HERE"
+    OPENAI_API_KEY: str = ""  # Set via environment variable or .env file
     OPENAI_API_BASE: str = "https://api.openai.com/v1"
     
     # Ollama Config
