@@ -17,10 +17,15 @@ librosa
 # Document parsing
 python-docx
 pypdf
-
-
-
-
-
-
-
+# Hot News Feature
+beautifulsoup4
+feedparser
+tavily-python
+# Email Marketing Feature
+fastapi-mail
+pandas
+openpyxl
+sqlalchemy
+apscheduler
+jinja2
+aiosqlite

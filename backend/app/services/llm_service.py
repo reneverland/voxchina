@@ -154,14 +154,19 @@ class LLMService:
         self.ollama_model = settings.OLLAMA_MODEL
         
         # OpenAI config
-        self.openai_client = AsyncOpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_API_BASE,
-            timeout=300.0  # 5分钟超时，适配gpt-4o的长响应时间
-        ) if self.provider == "openai" else None
+        if self.provider == "openai":
+            if not settings.OPENAI_API_KEY:
+                logger.error("⚠️  OPENAI_API_KEY 未配置！请在 .env 文件中设置或通过管理界面配置")
+            self.openai_client = AsyncOpenAI(
+                api_key=settings.OPENAI_API_KEY or "dummy-key",  # 防止初始化失败
+                base_url=settings.OPENAI_API_BASE,
+                timeout=300.0  # 5分钟超时，适配gpt-4o的长响应时间
+            )
+        else:
+            self.openai_client = None
 
     def _load_config_from_file(self):
-        """Load configuration from local file."""
+        """Load configuration from local file (including API key)."""
         try:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
@@ -172,20 +177,29 @@ class LLMService:
                     if config.get('model'):
                         self.model = config['model']
                         settings.LLM_MODEL = config['model']
+                    # Load API key if exists
+                    if config.get('api_key') and config.get('provider') == 'openai':
+                        settings.OPENAI_API_KEY = config['api_key']
+                        logger.info("✅ 已从配置文件加载 API Key")
+                        settings.LLM_MODEL = config['model']
                 logger.info(f"Loaded LLM config from file: {self.provider}/{self.model}")
         except Exception as e:
             logger.error(f"Failed to load LLM config file: {e}")
 
     def _save_config_to_file(self):
-        """Save configuration to local file."""
+        """Save configuration to local file (including API key)."""
         try:
             config = {
                 "provider": self.provider,
                 "model": self.model
             }
+            # Save API key if set (for openai provider)
+            if self.provider == "openai" and settings.OPENAI_API_KEY:
+                config["api_key"] = settings.OPENAI_API_KEY
+            
             with open(self.config_file, 'w') as f:
                 json.dump(config, f, indent=2)
-            logger.info("Saved LLM config to file")
+            logger.info(f"✅ 已保存 LLM 配置到文件: {self.config_file}")
         except Exception as e:
             logger.error(f"Failed to save LLM config file: {e}")
 
@@ -204,6 +218,10 @@ class LLMService:
             system_prompt: Optional system prompt (defaults to generic assistant prompt)
         """
         if self.provider == "openai":
+            # 检查 API Key
+            if not settings.OPENAI_API_KEY:
+                raise Exception("❌ LLM API Key 未配置！请联系管理员在【LLM设置】中配置 API 密钥")
+            
             try:
                 # Use custom system prompt if provided, otherwise use default
                 sys_content = system_prompt if system_prompt else "You are a helpful AI assistant that provides professional and accurate responses."
@@ -219,8 +237,20 @@ class LLMService:
                 )
                 return response.choices[0].message.content.strip()
             except Exception as e:
-                logger.error(f"Error generating with OpenAI: {str(e)}")
-                raise Exception("CBIT LLM处理时候，用脑太多，属于正常现象请尝试重新提交可以解决")
+                error_msg = str(e)
+                logger.error(f"Error generating with OpenAI: {error_msg}")
+                
+                # 检查具体错误类型
+                if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                    raise Exception("LLM响应超时，请稍后重试")
+                elif "rate limit" in error_msg.lower() or "429" in error_msg:
+                    raise Exception("API调用频率限制，请稍后重试")
+                elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                    raise Exception("LLM API认证失败，请检查配置")
+                elif "connection" in error_msg.lower() or "connect" in error_msg.lower():
+                    raise Exception(f"无法连接到LLM服务: {error_msg}")
+                else:
+                    raise Exception(f"LLM处理失败: {error_msg[:200]}")
         else:  # ollama
             try:
                 # For Ollama, prepend system prompt to user prompt if provided
@@ -299,26 +329,47 @@ class LLMService:
         prompt = prompt_template.format(content=content)
         return await self._generate_with_provider(prompt, timeout=90.0)
     
+    async def generate_completion(self, prompt: str, system_prompt: str = None, model: str = None, timeout: float = 60.0) -> str:
+        """
+        通用的文本生成方法，用于自定义prompt
+        """
+        return await self._generate_with_provider(prompt, timeout=timeout, model=model, system_prompt=system_prompt)
+    
     async def fetch_available_models(self) -> list[dict]:
         """
         Fetch available models from the configured LLM provider.
         """
         if self.provider == "openai":
             try:
-                # Use a short timeout for listing models to avoid hanging
-                models = await self.openai_client.models.list(timeout=5.0)
-                # Filter to only include GPT models
+                # Check if API key is configured
+                if not settings.OPENAI_API_KEY:
+                    logger.warning("⚠️  API Key 未配置，返回默认模型列表")
+                    raise Exception("API Key not configured")
+                
+                # Use a longer timeout for listing models
+                logger.info("🔄 正在从 API 获取模型列表...")
+                models = await self.openai_client.models.list(timeout=15.0)
+                
+                # 获取所有模型，不进行过滤
                 model_list = []
+                logger.info(f"📊 API 返回了 {len(models.data)} 个模型")
+                
                 for model in models.data:
-                    if any(prefix in model.id for prefix in ["gpt-", "o1-", "chatgpt-"]):
-                        model_list.append({
-                            "id": model.id,
-                            "name": model.id,
-                            "provider": "openai"
-                        })
-                return sorted(model_list, key=lambda x: x["id"])
+                    model_list.append({
+                        "id": model.id,
+                        "name": model.id,
+                        "provider": "openai"
+                    })
+                    logger.debug(f"   - {model.id}")
+                
+                # 按名称排序
+                model_list = sorted(model_list, key=lambda x: x["id"])
+                logger.info(f"✅ 成功获取并返回 {len(model_list)} 个模型")
+                return model_list
+                
             except Exception as e:
-                logger.error(f"Error fetching OpenAI models: {str(e)}")
+                logger.error(f"❌ 获取模型列表失败: {str(e)}")
+                logger.info("📋 返回默认模型列表（18个）")
                 # Return Comprehensive default models if API call fails
                 return [
                     {"id": "gpt-4o", "name": "gpt-4o", "provider": "openai"},

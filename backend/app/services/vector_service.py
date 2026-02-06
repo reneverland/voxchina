@@ -1,14 +1,16 @@
-from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from app.core.config import settings
+from app.services.qdrant_singleton import qdrant_singleton
 from loguru import logger
 import httpx
 
 class VectorService:
     def __init__(self):
-        self.client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
-        self.collection_name = "articles"
+        # Use singleton Qdrant client to avoid concurrent access issues
+        self.client = qdrant_singleton.get_client()
+        self.collection_name = "voxchina"  # VoxChina dedicated collection
         self.embedding_model = settings.OLLAMA_EMBEDDING_MODEL 
+        logger.info(f"✅ VectorService initialized with shared Qdrant client")
         self._ensure_collection()
     def _ensure_collection(self):
         try:
@@ -60,12 +62,19 @@ class VectorService:
         if not vector:
             return []
         
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=vector,
-            limit=limit
-        )
-        return results
+        try:
+            # Use query_points method for newer Qdrant versions (v1.7+)
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                query=vector,
+                limit=limit,
+                with_payload=True
+            )
+            # Return points from QueryResponse
+            return response.points if hasattr(response, 'points') else []
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            return []
 
     async def add_article(self, content: str, metadata: dict):
         vector = await self.get_embedding(content)

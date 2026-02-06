@@ -36,12 +36,25 @@ async def get_llm_config(current_user: dict = Depends(get_superadmin_user)):
     try:
         from loguru import logger
         logger.info(f"[LLM Config] Getting config for user: {current_user.get('username', 'unknown')}")
-        config = llm_service.get_current_config()
-        logger.info(f"[LLM Config] Config retrieved successfully")
-        return config
+        
+        # 尝试获取配置，如果失败返回默认配置
+        try:
+            config = llm_service.get_current_config()
+            logger.info(f"[LLM Config] Config retrieved successfully")
+            return config
+        except Exception as config_error:
+            logger.warning(f"[LLM Config] Failed to get config, returning default: {config_error}")
+            # 返回默认配置而不是抛出错误
+            return {
+                "provider": "openai",
+                "model": "gpt-4",
+                "display_name": "CBIT CBIT-Elite",
+                "api_key_set": False,
+                "warning": "配置服务暂时不可用，显示默认配置"
+            }
     except Exception as e:
         from loguru import logger
-        logger.error(f"[LLM Config] Failed to get config: {e}")
+        logger.error(f"[LLM Config] Unexpected error: {e}")
         import traceback
         logger.error(f"[LLM Config] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))

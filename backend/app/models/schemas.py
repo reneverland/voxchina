@@ -67,6 +67,7 @@ class IntegratedVoiceoverRequest(BaseModel):
     include_vox_intro: bool = True
     style_preference: Optional[str] = None  # S1/S2/S3/S4
     language: str = "zh"
+    word_limit: Optional[int] = None  # 字数限制: 2000/3000/4000 或 None(不限制)
 
 class EvidenceFinding(BaseModel):
     finding_index: int
@@ -86,6 +87,10 @@ class VisualAsset(BaseModel):
     takeaway_claim: Optional[str] = None
     linked_findings: List[int] = []
     editing_instruction: Optional[str] = None
+    # 图片相关字段
+    image_url: Optional[str] = None
+    image_filename: Optional[str] = None
+    image_path: Optional[str] = None
 
 class EvidenceLedger(BaseModel):
     doc_id: str
@@ -126,3 +131,73 @@ class IntegratedVoiceoverStatus(BaseModel):
     current_step: str  # Step0/StepA/StepA2/StepB/StepC/StepD
     result: Optional[IntegratedVoiceoverResponse] = None
     error: Optional[str] = None  # 错误信息（仅在failed时）
+
+# Hot News Schemas
+class NewsArticle(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    link: str
+    published_date: Optional[str] = ""
+    source: str
+    source_type: str  # rss/html/json
+
+class HotNewsRequest(BaseModel):
+    source_filter: Optional[str] = None  # 新闻源过滤
+    max_items: Optional[int] = 50
+
+class HotNewsResponse(BaseModel):
+    news_list: List[NewsArticle]
+    total_count: int
+    last_update: Optional[str] = None
+
+class HotTopicSearchRequest(BaseModel):
+    topic: str
+    use_tavily: Optional[bool] = True
+
+class NewsSourceInfo(BaseModel):
+    title: str
+    url: str
+    source: str
+
+class HotTopicSearchResponse(BaseModel):
+    topic: str
+    news_articles: List[NewsArticle]
+    tavily_summary: Optional[str] = None
+    sources: List[NewsSourceInfo]
+
+class GeneratePostRequest(BaseModel):
+    topic: str
+    style: Optional[str] = "professional"  # professional/casual/academic
+    length: Optional[str] = "medium"  # short/medium/long
+    language: Optional[str] = "zh"
+    generate_script: Optional[bool] = False
+
+class GeneratePostResponse(BaseModel):
+    topic: str
+    post_content: str
+    script_content: Optional[str] = None
+    tags: List[str]
+    sources: List[NewsSourceInfo]
+    generated_at: str
+    style: str
+    length: str
+
+class TrendingTopic(BaseModel):
+    title: str
+    url: str
+    description: str
+    score: Optional[float] = 0
+    published_date: Optional[str] = ""
+
+class TrendingTopicsResponse(BaseModel):
+    topics: List[TrendingTopic]
+    total_count: int
+    last_update: Optional[str] = None
+
+class SaveNewsToKBRequest(BaseModel):
+    """保存新闻到知识库的请求"""
+    title: str
+    content: str
+    url: str
+    source: Optional[str] = ""
+    published_date: Optional[str] = ""

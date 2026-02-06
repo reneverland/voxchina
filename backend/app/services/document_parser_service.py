@@ -180,9 +180,17 @@ class DocumentParserService:
                         })
                         paragraph_id += 1
             
-            logger.info(f"Parsed DOCX: {len(paragraphs)} paragraphs, {table_count} tables, {len(extracted_images)} images, title: {title[:50]}")
+            logger.info(f"✅ Parsed DOCX: {len(paragraphs)} paragraphs, {table_count} tables, {len(extracted_images)} images, title: {title[:50]}")
             
-            return {
+            # 详细记录图片信息
+            if extracted_images:
+                logger.info(f"📸 提取到 {len(extracted_images)} 张图片:")
+                for idx, img in enumerate(extracted_images):
+                    logger.info(f"   图片 {idx+1}: {img.get('filename')} - URL: {img.get('url')}")
+            else:
+                logger.warning("⚠️  未提取到任何图片")
+            
+            result = {
                 "title": title,
                 "total_paragraphs": len(paragraphs),
                 "total_tables": table_count,  # 表格数量
@@ -190,6 +198,9 @@ class DocumentParserService:
                 "images": extracted_images,  # 添加提取的图片
                 "format": "docx"
             }
+            
+            logger.info(f"📦 返回的 result 包含 images 字段: {'images' in result}, 值: {len(result.get('images', []))} 张图片")
+            return result
             
         except Exception as e:
             logger.error(f"Failed to parse DOCX: {e}")

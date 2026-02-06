@@ -29,13 +29,21 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-please-change-in-production" # Should be env var
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+
+    # Database Config
+    SQLALCHEMY_DATABASE_URI: str = "sqlite:///./voxchina_email.db"
     
     # User Management - Format: {username: {"password": "xxx", "role": "admin/user"}}
     USERS: dict = {
         "admin": {
-            "password": "admin123",
-            "role": "superadmin",  # 超级管理员，可以配置 LLM
+            "password": "goimba",
+            "role": "superadmin",  # 超级管理员，可以配置所有 LLM
             "display_name": "Super Administrator"
+        },
+        "voxchina": {
+            "password": "admin123",
+            "role": "admin",  # 基本管理员，只能看到 CBIT LLM
+            "display_name": "VoxChina Manager"
         },
         "voxadmin": {
             "password": "admin123",

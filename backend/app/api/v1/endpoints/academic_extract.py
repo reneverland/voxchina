@@ -4,9 +4,10 @@
 """
 
 import uuid
+import io
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 from pydantic import BaseModel
 
@@ -189,8 +190,21 @@ async def save_to_knowledge_base(
         summary_zh = data.get("summary_zh", "")
         summary_en = data.get("summary_en", "")
         fact_table = data.get("fact_table", {})
+        tags = data.get("tags", [])
+        task_id = data.get("task_id", "")  # 用于关联跳转
         
         logger.info(f"[API Save-to-KB] Data sizes - ZH: {len(summary_zh)} chars, EN: {len(summary_en)} chars")
+        
+        # 如果没有提供标签，自动推荐
+        if not tags:
+            try:
+                from app.services.knowledge_service import knowledge_service
+                content_for_tags = f"{summary_zh}\n{summary_en}"
+                tags = await knowledge_service.recommend_tags(content_for_tags, limit=5)
+                logger.info(f"[API Save-to-KB] Auto-recommended tags: {tags}")
+            except Exception as tag_error:
+                logger.warning(f"[API Save-to-KB] Failed to recommend tags: {tag_error}")
+                tags = []
         
         # Extract title from fact_table if available
         title = "Academic Extract"
@@ -205,11 +219,15 @@ async def save_to_knowledge_base(
             "summary_zh": summary_zh,
             "summary_en": summary_en,
             "fact_table": fact_table,
+            "tags": tags,
+            "source_task_id": task_id,  # 用于关联跳转
+            "source_type": "academic_extract",  # 用于识别来源类型
             "user": user
         }
         
         # Combine content for indexing
-        kb_content = f"Title: {title}\nSummary (ZH): {summary_zh}\nSummary (EN): {summary_en}\nFindings: {json.dumps(fact_table.get('key_findings', []), ensure_ascii=False)}"
+        tags_str = ", ".join(tags)
+        kb_content = f"Title: {title}\nTags: {tags_str}\nSummary (ZH): {summary_zh}\nSummary (EN): {summary_en}\nFindings: {json.dumps(fact_table.get('key_findings', []), ensure_ascii=False)}"
         
         logger.info(f"[API Save-to-KB] Content prepared. Total length: {len(kb_content)} chars. Calling knowledge_service...")
         
@@ -245,6 +263,17 @@ async def get_academic_extracts(
     """
     try:
         from app.services.knowledge_service import knowledge_service
+        
+        # 检查知识库服务是否可用
+        if not knowledge_service.initialized:
+            logger.warning(f"[API Get-Extracts] KnowledgeService not initialized, returning empty list")
+            return JSONResponse(content={
+                "items": [],
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "warning": "知识库服务暂时不可用"
+            })
         
         logger.info(f"[API Get-Extracts] Fetching academic extracts for user: {user}, limit: {limit}, offset: {offset}, search: {search}")
         
@@ -311,6 +340,11 @@ async def get_academic_extract_detail(
     try:
         from app.services.knowledge_service import knowledge_service
         
+        # 检查知识库服务是否可用
+        if not knowledge_service.initialized:
+            logger.warning(f"[API Get-Extract-Detail] KnowledgeService not initialized")
+            raise HTTPException(status_code=503, detail="知识库服务暂时不可用")
+        
         logger.info(f"[API Get-Extract-Detail] Fetching extract {extract_id} for user: {user}")
         
         # 从知识库获取文档详情
@@ -358,6 +392,11 @@ async def delete_academic_extract(
     try:
         from app.services.knowledge_service import knowledge_service
         
+        # 检查知识库服务是否可用
+        if not knowledge_service.initialized:
+            logger.warning(f"[API Delete-Extract] KnowledgeService not initialized")
+            raise HTTPException(status_code=503, detail="知识库服务暂时不可用")
+        
         logger.info(f"[API Delete-Extract] Deleting extract {extract_id} for user: {user}")
         
         # 先获取文档验证权限
@@ -388,3 +427,142 @@ async def delete_academic_extract(
         import traceback
         logger.error(f"[API Delete-Extract] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.post("/recommend-tags")
+async def recommend_tags_for_extract(
+    data: dict = Body(...),
+    user: str = Depends(get_current_user)
+):
+    """
+    为学术摘要推荐标签
+    
+    Body:
+    - text: 摘要内容
+    - limit: 返回标签数量（默认5）
+    """
+    try:
+        from app.services.knowledge_service import knowledge_service
+        
+        text = data.get("text", "")
+        limit = data.get("limit", 5)
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="缺少 text 参数")
+        
+        tags = await knowledge_service.recommend_tags(text[:2000], limit=limit)
+        
+        return JSONResponse(content={
+            "tags": tags,
+            "count": len(tags)
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Academic Recommend-Tags] Failed: {e}")
+        raise HTTPException(status_code=500, detail=f"推荐标签失败: {str(e)}")
+
+
+@router.post("/download-word")
+async def download_as_word(
+    data: dict = Body(...),
+    user: str = Depends(get_current_user)
+):
+    """
+    将学术摘要下载为 Word 文档
+    
+    Body:
+    - summary_zh: 中文摘要
+    - summary_en: 英文摘要
+    - fact_table: 事实表
+    - title: 文档标题（可选）
+    """
+    try:
+        from docx import Document
+        from docx.shared import Pt, Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        import json
+        
+        summary_zh = data.get("summary_zh", "")
+        summary_en = data.get("summary_en", "")
+        fact_table = data.get("fact_table", {})
+        title = data.get("title", "学术摘要提取结果")
+        
+        if not summary_zh and not summary_en:
+            raise HTTPException(status_code=400, detail="缺少摘要内容")
+        
+        # 创建 Word 文档
+        doc = Document()
+        
+        # 设置标题
+        heading = doc.add_heading(title, level=0)
+        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # 中文摘要
+        if summary_zh:
+            doc.add_heading("中文摘要", level=1)
+            for para in summary_zh.split('\n\n'):
+                if para.strip():
+                    doc.add_paragraph(para.strip())
+        
+        # 英文摘要
+        if summary_en:
+            doc.add_heading("English Summary", level=1)
+            for para in summary_en.split('\n\n'):
+                if para.strip():
+                    doc.add_paragraph(para.strip())
+        
+        # 事实表
+        if fact_table:
+            doc.add_heading("结构化事实表", level=1)
+            
+            # 基本信息
+            basic_info = fact_table.get("basic_info", {})
+            if basic_info:
+                doc.add_heading("基本信息", level=2)
+                for key, value in basic_info.items():
+                    if isinstance(value, dict):
+                        doc.add_paragraph(f"{key}: {json.dumps(value, ensure_ascii=False)}")
+                    elif isinstance(value, list):
+                        doc.add_paragraph(f"{key}: {', '.join(str(v) for v in value)}")
+                    else:
+                        doc.add_paragraph(f"{key}: {value}")
+            
+            # 核心发现
+            key_findings = fact_table.get("key_findings", [])
+            if key_findings:
+                doc.add_heading("核心发现", level=2)
+                for i, finding in enumerate(key_findings, 1):
+                    if isinstance(finding, dict):
+                        doc.add_paragraph(f"{i}. {finding.get('finding', finding)}")
+                    else:
+                        doc.add_paragraph(f"{i}. {finding}")
+        
+        # 保存到内存
+        file_stream = io.BytesIO()
+        doc.save(file_stream)
+        file_stream.seek(0)
+        
+        # 返回文件 - 使用 URL 编码处理中文文件名
+        from urllib.parse import quote
+        safe_title = title.replace('/', '_').replace('\\', '_')[:50]  # 限制长度并移除非法字符
+        filename_encoded = quote(f"{safe_title}.docx")
+        
+        logger.info(f"[Download Word] Generating document: {safe_title}.docx")
+        
+        return StreamingResponse(
+            file_stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"document.docx\"; filename*=UTF-8''{filename_encoded}"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Download Word] Failed: {e}")
+        import traceback
+        logger.error(f"[Download Word] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"生成Word文档失败: {str(e)}")

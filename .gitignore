@@ -43,6 +43,72 @@ env/
 .cache/
 backend/.cache/
 
-# Audio files (可选，如果音频文件太大)
-# static/audio/*.mp3
-# static/audio/*.wav
+# Audio files
+backend/static/audio/
+*.wav
+*.mp3
+
+# Extracted images (runtime generated)
+backend/static/images/extracted/
+
+# Task data (runtime generated)
+backend/static/integrated_voiceover_tasks.json
+backend/static/integrated_voiceover_tasks.tmp
+
+# Database files
+*.db
+*.sqlite
+backend/qdrant_data/
+backend/qdrant_data.backup*/
+
+# Model files
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.h5
+*.onnx
+backend/models/
+backend/melotts_repo/
+
+# Cache
+backend/cache/
+
+# Large archives
+*.tar.gz
+
+# MD docs (auto-generated)
+BUGFIX_*.md
+CRITICAL_FIX_*.md
+ERROR_*.md
+FEATURE_*.md
+FIXES_*.md
+INTEGRATED_VOICEOVER_*.md
+LLM_METHOD_FIX.md
+PROCESSING_BUG_FIX.md
+QUICK_FIX_*.md
+QUICK_START_*.md
+RESTART_*.md
+URGENT_*.md
+FIX_EMAIL_*.md
+SMTP_TEST_*.md
+backend/FINAL_FIX_*.md
+backend/FINAL_RESTART_*.txt
+backend/RESTART_*.md
+backend/EMAIL_TEMPLATES_GUIDE.md
+backend/EMAIL_TEMPLATE_PREVIEW_GUIDE.md
+backend/PRESET_TEMPLATES_GUIDE.md
+backend/PREVIEW_FEATURE_DEMO.html
+backend/QUILL_EDITOR_FIX.md
+backend/TEMPLATE_EXAMPLE.md
+backend/UPGRADE_SUMMARY.md
+backend/VISUAL_EDITOR_GUIDE.md
+frontend/DEBUG_TEMPLATE_LOADING.md
+frontend/EMAIL_UPDATES_*.md
+
+frontend/EMAIL_VISUAL_EDITOR_UPDATE.md
+frontend/TEMPLATE_DEBUG_GUIDE.md
+frontend/VISUAL_MODE_FIX.md
+
+# LLM config with sensitive API keys
+backend/llm_config.json

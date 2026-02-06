@@ -186,6 +186,81 @@
                       <p v-if="uploadError" class="text-xs text-red-500 text-center">{{ uploadError }}</p>
                     </div>
                   </div>
+                  
+                  <!-- Text to Speech Section -->
+                  <div class="bg-gradient-to-br from-green-50/50 to-emerald-50/50 rounded-xl border border-green-100 p-6">
+                    <h3 class="text-md font-semibold text-slate-800 mb-4 flex items-center">
+                      <div class="p-1.5 bg-green-100 text-green-600 rounded-lg mr-2">
+                        <Volume2 class="w-4 h-4" />
+                      </div>
+                      {{ currentLanguage === 'zh' ? '文本转语音' : 'Text to Speech' }}
+                    </h3>
+                    
+                    <div class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                          {{ currentLanguage === 'zh' ? '输入文本' : 'Input Text' }}
+                        </label>
+                        <textarea 
+                          v-model="ttsInputText"
+                          :placeholder="currentLanguage === 'zh' ? '输入您想要转换为语音的文本内容...' : 'Enter the text you want to convert to speech...'"
+                          class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all resize-none"
+                          rows="4"
+                        ></textarea>
+                        <div class="text-xs text-slate-400 mt-1 text-right">
+                          {{ ttsInputText.length }} {{ currentLanguage === 'zh' ? '字符' : 'characters' }}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">
+                          {{ currentLanguage === 'zh' ? '选择声音' : 'Select Voice' }}
+                        </label>
+                        <select 
+                          v-model="ttsSelectedVoiceId"
+                          class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+                        >
+                          <option value="">{{ currentLanguage === 'zh' ? '-- 请选择声音 --' : '-- Select a voice --' }}</option>
+                          <option v-for="voice in voices" :key="voice.id" :value="voice.id">
+                            {{ voice.name }}
+                          </option>
+                        </select>
+                        <p v-if="voices.length === 0" class="text-xs text-amber-600 mt-1">
+                          {{ currentLanguage === 'zh' ? '请先克隆一个声音' : 'Please clone a voice first' }}
+                        </p>
+                      </div>
+
+                      <button 
+                        @click="generateTTSAudio"
+                        :disabled="!ttsInputText.trim() || !ttsSelectedVoiceId || generatingTTSAudio"
+                        class="w-full py-2.5 bg-green-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-green-200 hover:bg-green-600 hover:shadow-green-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+                      >
+                        <Loader2 v-if="generatingTTSAudio" class="w-4 h-4 mr-2 animate-spin" />
+                        {{ generatingTTSAudio ? (currentLanguage === 'zh' ? '生成中...' : 'Generating...') : (currentLanguage === 'zh' ? '生成语音' : 'Generate Audio') }}
+                      </button>
+                    </div>
+                    
+                    <!-- Generated Audio Result -->
+                    <div v-if="ttsGeneratedAudioUrl" class="mt-4 p-4 bg-white rounded-lg border border-green-200">
+                      <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-medium text-slate-700">
+                          {{ currentLanguage === 'zh' ? '生成的音频' : 'Generated Audio' }}
+                        </span>
+                        <button
+                          @click="downloadTTSAudio"
+                          class="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 text-xs rounded-lg transition-colors flex items-center"
+                        >
+                          📥 {{ currentLanguage === 'zh' ? '下载' : 'Download' }}
+                        </button>
+                      </div>
+                      <audio 
+                        :src="ttsGeneratedAudioUrl" 
+                        controls 
+                        class="w-full"
+                        style="height: 40px;"
+                      ></audio>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Library List Section -->
@@ -363,6 +438,14 @@
                       </h3>
                       <div class="flex space-x-2">
                         <button 
+                          @click="saveAcademicToKB"
+                          :disabled="isSavingAcademicToKB"
+                          class="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <span v-if="isSavingAcademicToKB">⏳ {{ currentLanguage === 'zh' ? '保存中...' : 'Saving...' }}</span>
+                          <span v-else>💾 {{ currentLanguage === 'zh' ? '存入知识库' : 'Save to KB' }}</span>
+                        </button>
+                        <button 
                           @click="copyAcademicResult"
                           class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-lg transition-colors"
                         >
@@ -372,9 +455,97 @@
                           @click="downloadAcademicResult"
                           class="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-600 text-xs font-medium rounded-lg transition-colors"
                         >
-                          {{ t('download') }}
+                          📄 TXT
+                        </button>
+                        <button 
+                          @click="downloadAcademicWord"
+                          class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-600 text-xs font-medium rounded-lg transition-colors"
+                        >
+                          📄 Word
                         </button>
                       </div>
+                    </div>
+
+                    <!-- Recommended Tags with Selection -->
+                    <div class="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-amber-800 flex items-center">
+                          <Tag class="w-4 h-4 mr-1.5" />
+                          {{ currentLanguage === 'zh' ? '标签管理' : 'Tag Management' }}
+                        </span>
+                        <button
+                          v-if="academicRecommendedTags.length === 0"
+                          @click="fetchAcademicRecommendedTags"
+                          :disabled="loadingAcademicTags"
+                          class="text-xs text-amber-600 hover:text-amber-700 flex items-center"
+                        >
+                          <Loader2 v-if="loadingAcademicTags" class="w-3 h-3 mr-1 animate-spin" />
+                          <RefreshCw v-else class="w-3 h-3 mr-1" />
+                          {{ loadingAcademicTags ? (currentLanguage === 'zh' ? '生成中...' : 'Generating...') : (currentLanguage === 'zh' ? '生成推荐标签' : 'Generate Tags') }}
+                        </button>
+                        <button
+                          v-else
+                          @click="fetchAcademicRecommendedTags"
+                          :disabled="loadingAcademicTags"
+                          class="text-xs text-amber-600 hover:text-amber-700 flex items-center"
+                        >
+                          <RefreshCw class="w-3 h-3 mr-1" :class="{ 'animate-spin': loadingAcademicTags }" />
+                          {{ currentLanguage === 'zh' ? '重新生成' : 'Regenerate' }}
+                        </button>
+                      </div>
+                      
+                      <!-- Selected Tags -->
+                      <div v-if="academicSelectedTags.length > 0" class="mb-2">
+                        <div class="text-xs text-amber-700 mb-1">{{ currentLanguage === 'zh' ? '已选标签:' : 'Selected:' }}</div>
+                        <div class="flex flex-wrap gap-1.5">
+                          <span 
+                            v-for="tag in academicSelectedTags" 
+                            :key="tag"
+                            class="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full flex items-center cursor-pointer hover:bg-green-200"
+                            @click="toggleAcademicTag(tag)"
+                          >
+                            {{ tag }}
+                            <X class="w-3 h-3 ml-1" />
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <!-- Recommended Tags (clickable to select) -->
+                      <div v-if="academicRecommendedTags.length > 0" class="mb-2">
+                        <div class="text-xs text-amber-700 mb-1">{{ currentLanguage === 'zh' ? '推荐标签 (点击选择):' : 'Recommended (click to select):' }}</div>
+                        <div class="flex flex-wrap gap-1.5">
+                          <span 
+                            v-for="tag in academicRecommendedTags.filter(t => !academicSelectedTags.includes(t))" 
+                            :key="tag"
+                            class="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full cursor-pointer hover:bg-amber-200 transition-colors"
+                            @click="toggleAcademicTag(tag)"
+                          >
+                            + {{ tag }}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <!-- Custom Tag Input -->
+                      <div class="flex items-center gap-2 mt-2">
+                        <input
+                          v-model="academicCustomTag"
+                          type="text"
+                          :placeholder="currentLanguage === 'zh' ? '输入自定义标签...' : 'Enter custom tag...'"
+                          class="flex-1 px-2 py-1 text-xs border border-amber-300 rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          @keyup.enter="addAcademicCustomTag"
+                        />
+                        <button
+                          @click="addAcademicCustomTag"
+                          :disabled="!academicCustomTag.trim()"
+                          class="px-2 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {{ currentLanguage === 'zh' ? '添加' : 'Add' }}
+                        </button>
+                      </div>
+                      
+                      <p v-if="academicRecommendedTags.length === 0 && academicSelectedTags.length === 0" class="text-xs text-amber-600 mt-2">
+                        {{ currentLanguage === 'zh' ? '点击"生成推荐标签"获取推荐，或直接输入自定义标签' : 'Click "Generate Tags" for recommendations, or enter custom tags' }}
+                      </p>
                     </div>
 
                     <!-- Tab Switcher -->
@@ -405,12 +576,43 @@
 
                     <!-- Summary View -->
                     <div v-if="academicResultTab === 'summary'" class="space-y-4">
+                      <!-- 编辑按钮 -->
+                      <div class="flex justify-end space-x-2">
+                        <button
+                          v-if="!isEditingAcademicSummary"
+                          @click="startEditAcademicSummary"
+                          class="px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors font-medium"
+                        >
+                          ✏️ {{ currentLanguage === 'zh' ? '编辑' : 'Edit' }}
+                        </button>
+                        <template v-else>
+                          <button
+                            @click="saveEditAcademicSummary"
+                            class="px-3 py-1.5 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium"
+                          >
+                            ✅ {{ currentLanguage === 'zh' ? '保存' : 'Save' }}
+                          </button>
+                          <button
+                            @click="cancelEditAcademicSummary"
+                            class="px-3 py-1.5 text-sm bg-slate-400 hover:bg-slate-500 text-white rounded-lg transition-colors font-medium"
+                          >
+                            ❌ {{ currentLanguage === 'zh' ? '取消' : 'Cancel' }}
+                          </button>
+                        </template>
+                      </div>
+                      
                       <div class="border border-slate-100 rounded-lg overflow-hidden">
                         <div class="bg-slate-50 px-4 py-2 border-b border-slate-100">
                           <h4 class="text-sm font-semibold text-slate-700">{{ t('chineseSummary') }}</h4>
                         </div>
                         <div class="p-4 bg-white">
-                          <p class="text-slate-700 leading-relaxed text-sm">{{ academicResult.summary_zh }}</p>
+                          <textarea
+                            v-if="isEditingAcademicSummary"
+                            v-model="editedAcademicSummaryZh"
+                            class="w-full h-32 p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm resize-y"
+                            :placeholder="currentLanguage === 'zh' ? '编辑中文摘要...' : 'Edit Chinese summary...'"
+                          ></textarea>
+                          <p v-else class="text-slate-700 leading-relaxed text-sm">{{ academicResult.summary_zh }}</p>
                         </div>
                       </div>
 
@@ -419,7 +621,13 @@
                           <h4 class="text-sm font-semibold text-slate-700">{{ t('englishSummary') }}</h4>
                         </div>
                         <div class="p-4 bg-white">
-                          <p class="text-slate-700 leading-relaxed text-sm">{{ academicResult.summary_en }}</p>
+                          <textarea
+                            v-if="isEditingAcademicSummary"
+                            v-model="editedAcademicSummaryEn"
+                            class="w-full h-32 p-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm resize-y"
+                            :placeholder="currentLanguage === 'zh' ? '编辑英文摘要...' : 'Edit English summary...'"
+                          ></textarea>
+                          <p v-else class="text-slate-700 leading-relaxed text-sm">{{ academicResult.summary_en }}</p>
                         </div>
                       </div>
                     </div>
@@ -774,6 +982,31 @@
                   </p>
                 </div>
                 <div class="flex gap-3 items-center">
+                  <!-- Upload Article Button -->
+                  <button 
+                    @click="openUploadArticleDialog"
+                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                  >
+                    <Upload class="w-4 h-4" />
+                    {{ currentLanguage === 'zh' ? '上传文章' : 'Upload Article' }}
+                  </button>
+                  <!-- Tag Management Button -->
+                  <button 
+                    @click="showTagManagementDialog = true; fetchTags()"
+                    class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    :title="currentLanguage === 'zh' ? '标签管理' : 'Manage Tags'"
+                  >
+                    <Tag class="w-5 h-5" />
+                  </button>
+                  <!-- Tag Filter Dropdown -->
+                  <select 
+                    v-model="selectedTagFilter"
+                    @change="filterByTag"
+                    class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  >
+                    <option value="">{{ currentLanguage === 'zh' ? '所有标签' : 'All Tags' }}</option>
+                    <option v-for="tag in availableTags" :key="tag" :value="tag">{{ tag }}</option>
+                  </select>
                   <!-- Refresh Button -->
                   <button 
                     @click="fetchKnowledgeDocs"
@@ -816,7 +1049,7 @@
                 <div 
                   v-for="doc in knowledgeDocs" 
                   :key="doc.id" 
-                  class="group bg-white border border-slate-100 rounded-xl p-5 hover:border-indigo-200 hover:shadow-md transition-all relative flex flex-col h-[280px]"
+                  class="group bg-white border border-slate-100 rounded-xl p-5 hover:border-indigo-200 hover:shadow-md transition-all relative flex flex-col h-[320px]"
                 >
                   <!-- Card Header -->
                   <div class="flex justify-between items-start mb-3">
@@ -842,13 +1075,43 @@
                     {{ doc.payload.title || 'Untitled Document' }}
                   </h3>
                   
+                  <!-- Tags Display -->
+                  <div v-if="doc.payload.tags && doc.payload.tags.length > 0" class="flex flex-wrap gap-1.5 mb-2">
+                    <span 
+                      v-for="tag in doc.payload.tags.slice(0, 3)" 
+                      :key="tag"
+                      class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] rounded-full"
+                    >
+                      {{ tag }}
+                    </span>
+                    <span 
+                      v-if="doc.payload.tags.length > 3"
+                      class="px-2 py-0.5 bg-slate-50 text-slate-400 text-[10px] rounded-full"
+                    >
+                      +{{ doc.payload.tags.length - 3 }}
+                    </span>
+                  </div>
+                  
                   <div class="flex-1 overflow-hidden relative mb-3">
-                    <p class="text-xs text-slate-500 leading-relaxed line-clamp-6">
+                    <p class="text-xs text-slate-500 leading-relaxed line-clamp-4">
                       {{ doc.payload.summary_zh || doc.payload.content || 'No summary available.' }}
                     </p>
                     <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-white to-transparent"></div>
                   </div>
 
+                  <!-- Source Link (if from Academic Extract or Integrated Voiceover) -->
+                  <div v-if="doc.payload.source_task_id" class="mb-2">
+                    <button 
+                      @click="navigateToSourceTask(doc.payload)"
+                      class="text-[10px] text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-full transition-colors flex items-center"
+                    >
+                      <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      {{ currentLanguage === 'zh' ? '查看原始任务' : 'View Source Task' }}
+                    </button>
+                  </div>
+                  
                   <!-- Card Footer -->
                   <div class="pt-3 border-t border-slate-50 flex justify-between items-center mt-auto">
                     <span class="text-[10px] text-slate-400">
@@ -904,6 +1167,1124 @@
               </div>
             </div>
 
+            <!-- Image Management Content -->
+            <div v-else-if="activeTab === 'images'" class="h-full flex flex-col">
+              <div class="mb-8 border-b border-slate-50 pb-6 flex justify-between items-end">
+                <div>
+                  <h2 class="text-xl font-medium text-slate-700 mb-2">{{ t('imageManagement') }}</h2>
+                  <p class="text-slate-500 font-light">
+                    {{ currentLanguage === 'en' ? 'Manage extracted images from documents.' : '管理从文档中提取的图片。' }}
+                  </p>
+                </div>
+                <div class="flex gap-3">
+                  <button 
+                    @click="fetchImages"
+                    :disabled="loadingImages"
+                    class="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                  >
+                    <RefreshCw :class="['w-4 h-4', loadingImages ? 'animate-spin' : '']" />
+                    {{ t('refresh') }}
+                  </button>
+                  <button 
+                    v-if="selectedImages.size > 0"
+                    @click="deleteSelectedImages"
+                    class="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                    {{ t('deleteSelected') }} ({{ selectedImages.size }})
+                  </button>
+                  <button 
+                    @click="cleanupOldImages(30)"
+                    class="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
+                  >
+                    <AlertCircle class="w-4 h-4" />
+                    {{ t('cleanupOld') }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Loading State -->
+              <div v-if="loadingImages" class="flex-1 flex items-center justify-center">
+                <Loader2 class="w-8 h-8 text-blue-500 animate-spin" />
+              </div>
+
+              <!-- Empty State -->
+              <div v-else-if="imageList.length === 0" class="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Image class="w-6 h-6 text-slate-300" />
+                </div>
+                <p class="text-slate-500 font-medium">No images yet</p>
+                <p class="text-xs text-slate-400 mt-1">Images will appear here when you upload documents in Integrated Voiceover.</p>
+              </div>
+
+              <!-- Image Grid -->
+              <div v-else class="flex-1 overflow-y-auto">
+                <!-- Select All -->
+                <div class="mb-4 flex items-center justify-between bg-slate-50 p-3 rounded-lg">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      :checked="selectedImages.size === imageList.length && imageList.length > 0"
+                      @change="toggleSelectAll"
+                      class="w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
+                    />
+                    <span class="text-sm font-medium text-slate-700">
+                      {{ selectedImages.size === imageList.length && imageList.length > 0 ? t('clearAll') : t('selectAll') }}
+                    </span>
+                  </label>
+                  <span class="text-sm text-slate-500">
+                    {{ imageList.length }} {{ t('imageCount') }}
+                  </span>
+                </div>
+
+                <!-- Image Grid -->
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  <div 
+                    v-for="img in imageList" 
+                    :key="img.filename"
+                    class="group relative bg-white border border-slate-200 rounded-lg overflow-hidden hover:border-blue-300 hover:shadow-md transition-all"
+                  >
+                    <!-- Checkbox -->
+                    <div class="absolute top-2 left-2 z-10">
+                      <input 
+                        type="checkbox" 
+                        :checked="selectedImages.has(img.filename)"
+                        @change="toggleImageSelection(img.filename)"
+                        class="w-5 h-5 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500 focus:ring-2 shadow-sm"
+                      />
+                    </div>
+
+                    <!-- Delete Button -->
+                    <button 
+                      @click="deleteImage(img.filename)"
+                      class="absolute top-2 right-2 z-10 p-1.5 bg-red-500/90 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    >
+                      <Trash2 class="w-4 h-4" />
+                    </button>
+
+                    <!-- Image -->
+                    <div class="aspect-square bg-slate-100 flex items-center justify-center p-2">
+                      <img 
+                        :src="`${API_BASE_URL}${img.url}`"
+                        :alt="img.filename"
+                        class="max-w-full max-h-full object-contain"
+                        @error="(e) => (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f1f5f9%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23cbd5e1%22 font-size=%2216%22%3EImage%3C/text%3E%3C/svg%3E'"
+                      />
+                    </div>
+
+                    <!-- Info -->
+                    <div class="p-2 bg-white border-t border-slate-100">
+                      <p class="text-xs text-slate-600 truncate font-medium" :title="img.filename">
+                        {{ img.filename }}
+                      </p>
+                      <div class="flex items-center justify-between mt-1">
+                        <span class="text-[10px] text-slate-400">
+                          {{ (img.size_bytes / 1024).toFixed(1) }} KB
+                        </span>
+                        <span class="text-[10px] text-slate-400">
+                          {{ new Date(img.created_at).toLocaleDateString() }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI Search Content -->
+            <div v-else-if="activeTab === 'search'" class="h-full flex flex-col">
+              <div class="mb-8 border-b border-slate-50 pb-6">
+                <div>
+                  <h2 class="text-xl font-medium text-slate-700 mb-2">{{ t('aiSearch') }}</h2>
+                  <p class="text-slate-500 font-light">
+                    {{ currentLanguage === 'en' ? 'Search knowledge base with AI-powered semantic search and get intelligent answers.' : '通过 AI 语义搜索知识库，获得智能回答和相关文章。' }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 flex-1">
+                <!-- Left Panel: Search Input -->
+                <div class="lg:col-span-2 space-y-6">
+                  <div class="bg-slate-50/50 rounded-xl border border-slate-100 p-6 h-full">
+                    <h3 class="text-md font-semibold text-slate-800 mb-4 flex items-center">
+                      <div class="p-1.5 bg-blue-100 text-blue-600 rounded-lg mr-2">
+                        <Search class="w-4 h-4" />
+                      </div>
+                      {{ currentLanguage === 'en' ? 'Search Query' : '搜索查询' }}
+                    </h3>
+                    
+                    <div class="space-y-4">
+                      <!-- Search Input -->
+                      <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                          {{ currentLanguage === 'en' ? 'Question / Keywords' : '问题 / 关键词' }}
+                        </label>
+                        <textarea 
+                          v-model="searchQuery"
+                          :placeholder="currentLanguage === 'en' ? 'e.g., What are the latest developments in China AI policy?' : '例如：中国人工智能政策的最新发展是什么？'"
+                          class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                          rows="4"
+                          @keyup.ctrl.enter="performSearch"
+                        ></textarea>
+                        <p class="text-xs text-slate-400 mt-1">
+                          {{ currentLanguage === 'en' ? 'Press Ctrl+Enter to search' : '按 Ctrl+Enter 快速搜索' }}
+                        </p>
+                      </div>
+                      
+                      <!-- Search Options -->
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                            {{ currentLanguage === 'en' ? 'Search Type' : '搜索类型' }}
+                          </label>
+                          <select 
+                            v-model="searchType"
+                            class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          >
+                            <option value="ai_qa">{{ currentLanguage === 'en' ? 'AI Q&A' : 'AI 问答' }}</option>
+                            <option value="knowledge">{{ currentLanguage === 'en' ? 'Knowledge Base' : '知识库搜索' }}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                            {{ currentLanguage === 'en' ? 'Result Limit' : '结果数量' }}
+                          </label>
+                          <select 
+                            v-model="searchLimit"
+                            class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          >
+                            <option :value="5">5 {{ currentLanguage === 'en' ? 'results' : '条' }}</option>
+                            <option :value="10">10 {{ currentLanguage === 'en' ? 'results' : '条' }}</option>
+                            <option :value="15">15 {{ currentLanguage === 'en' ? 'results' : '条' }}</option>
+                            <option :value="20">20 {{ currentLanguage === 'en' ? 'results' : '条' }}</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      <!-- Language Selection -->
+                      <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                          {{ currentLanguage === 'en' ? 'Answer Language' : '回答语言' }}
+                        </label>
+                        <select 
+                          v-model="searchLanguage"
+                          class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        >
+                          <option value="zh">{{ currentLanguage === 'en' ? 'Chinese' : '中文' }}</option>
+                          <option value="en">{{ currentLanguage === 'en' ? 'English' : '英文' }}</option>
+                        </select>
+                      </div>
+                      
+                      <!-- Search Button -->
+                      <button
+                        @click="performSearch"
+                        :disabled="!searchQuery.trim() || isSearching"
+                        :class="[
+                          'w-full py-3 rounded-lg font-medium transition-all flex items-center justify-center',
+                          searchQuery.trim() && !isSearching
+                            ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-200/50'
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        ]"
+                      >
+                        <Loader2 v-if="isSearching" class="w-4 h-4 mr-2 animate-spin" />
+                        <Search v-else class="w-4 h-4 mr-2" />
+                        {{ isSearching ? (currentLanguage === 'en' ? 'Searching...' : '搜索中...') : (currentLanguage === 'en' ? 'Search' : '开始搜索') }}
+                      </button>
+
+                      <!-- Search History -->
+                      <div v-if="searchHistory.length > 0" class="pt-4 border-t border-slate-200">
+                        <div class="flex items-center justify-between mb-2">
+                          <label class="text-sm font-medium text-slate-600">
+                            {{ currentLanguage === 'en' ? 'Recent Searches' : '最近搜索' }}
+                          </label>
+                          <button 
+                            @click="clearSearchHistory"
+                            class="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            {{ currentLanguage === 'en' ? 'Clear' : '清空' }}
+                          </button>
+                        </div>
+                        <div class="space-y-1 max-h-32 overflow-y-auto">
+                          <button
+                            v-for="(history, idx) in searchHistory.slice(0, 5)"
+                            :key="idx"
+                            @click="searchQuery = history; performSearch()"
+                            class="w-full text-left text-xs text-slate-500 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors truncate"
+                          >
+                            {{ history }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right Panel: Search Results -->
+                <div class="lg:col-span-3 space-y-6">
+                  <!-- Results Container -->
+                  <div v-if="searchResults || aiAnswer" class="space-y-6">
+                    <!-- AI Answer Section -->
+                    <div v-if="aiAnswer && searchType === 'ai_qa'" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-6">
+                      <div class="flex items-start justify-between mb-4">
+                        <h3 class="text-md font-semibold text-blue-900 flex items-center">
+                          <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                          {{ currentLanguage === 'en' ? 'AI Answer' : 'AI 回答' }}
+                        </h3>
+                        <div class="flex items-center space-x-2">
+                          <button
+                            @click="copyToClipboard(aiAnswer)"
+                            class="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                            :title="currentLanguage === 'en' ? 'Copy' : '复制'"
+                          >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="prose prose-sm max-w-none">
+                        <p class="text-slate-700 leading-relaxed whitespace-pre-wrap">{{ aiAnswer }}</p>
+                      </div>
+                      <div v-if="searchDuration" class="mt-4 pt-4 border-t border-blue-200">
+                        <p class="text-xs text-blue-600">
+                          ⚡ {{ currentLanguage === 'en' ? 'Search completed in' : '搜索耗时' }} {{ searchDuration }}ms
+                        </p>
+                      </div>
+                    </div>
+
+                    <!-- Sources / Results List -->
+                    <div class="bg-white rounded-xl border border-slate-100 p-6">
+                      <h3 class="text-md font-semibold text-slate-800 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        {{ currentLanguage === 'en' ? 'Related Documents' : '相关文档' }}
+                        <span class="ml-2 text-xs font-normal text-slate-500">({{ searchResultsList.length }} {{ currentLanguage === 'en' ? 'results' : '条结果' }})</span>
+                      </h3>
+                      
+                      <div v-if="searchResultsList.length === 0" class="text-center py-8">
+                        <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Search class="w-6 h-6 text-slate-300" />
+                        </div>
+                        <p class="text-slate-500 font-medium">{{ currentLanguage === 'en' ? 'No results found' : '未找到相关结果' }}</p>
+                        <p class="text-xs text-slate-400 mt-1">{{ currentLanguage === 'en' ? 'Try different keywords or refine your query' : '尝试使用不同的关键词或优化您的查询' }}</p>
+                      </div>
+
+                      <div v-else class="space-y-3">
+                        <div
+                          v-for="(result, idx) in searchResultsList"
+                          :key="idx"
+                          class="p-4 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all cursor-pointer"
+                          @click="viewSearchResult(result)"
+                        >
+                          <div class="flex items-start justify-between mb-2">
+                            <h4 class="text-sm font-semibold text-slate-800 flex-1">
+                              {{ result.title || (currentLanguage === 'en' ? 'Untitled' : '无标题') }}
+                            </h4>
+                            <div class="flex items-center ml-2">
+                              <span class="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                                {{ (result.score * 100).toFixed(1) }}%
+                              </span>
+                            </div>
+                          </div>
+                          <p class="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                            {{ result.summary || result.content || (currentLanguage === 'en' ? 'No description available' : '暂无描述') }}
+                          </p>
+                          <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-200">
+                            <div class="flex items-center space-x-2 text-xs text-slate-400">
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                              </svg>
+                              <span>ID: {{ result.id }}</span>
+                            </div>
+                            <button
+                              class="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center"
+                            >
+                              {{ currentLanguage === 'en' ? 'View Details' : '查看详情' }}
+                              <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Empty State -->
+                  <div v-else class="bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-12 text-center">
+                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Search class="w-8 h-8 text-slate-300" />
+                    </div>
+                    <h3 class="text-lg font-medium text-slate-700 mb-2">{{ currentLanguage === 'en' ? 'Ready to Search' : '准备开始搜索' }}</h3>
+                    <p class="text-sm text-slate-500 mb-4">{{ currentLanguage === 'en' ? 'Enter your question or keywords and click search to get AI-powered answers and relevant documents.' : '输入您的问题或关键词，点击搜索获取 AI 回答和相关文档。' }}</p>
+                    <div class="flex flex-col items-center space-y-2 text-xs text-slate-400">
+                      <div class="flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        {{ currentLanguage === 'en' ? 'Tip: Use Ctrl+Enter for quick search' : '提示：使用 Ctrl+Enter 快速搜索' }}
+                      </div>
+                      <div class="flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        {{ currentLanguage === 'en' ? 'AI Q&A mode provides intelligent summaries' : 'AI 问答模式提供智能总结' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hot Topics Content -->
+            <div v-else-if="activeTab === 'trending'" class="h-full flex flex-col">
+              <div class="mb-8 border-b border-slate-50 pb-6">
+                <div>
+                  <h2 class="text-xl font-medium text-slate-700 mb-2">{{ t('hotTopics') }}</h2>
+                  <p class="text-slate-500 font-light">
+                    {{ currentLanguage === 'en' ? 'Generate trending posts from real-time news and hot topics.' : '基于实时新闻和热点话题快速生成推文内容。' }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Panel: Topic Search & Generation -->
+                <div class="lg:col-span-2 space-y-6">
+                  <!-- Search & Generate Card -->
+                  <div class="bg-slate-50/50 rounded-xl border border-slate-100 p-6">
+                    <h3 class="text-md font-semibold text-slate-800 mb-4 flex items-center">
+                      <div class="p-1.5 bg-orange-100 text-orange-600 rounded-lg mr-2">
+                        <Flame class="w-4 h-4" />
+                      </div>
+                      {{ currentLanguage === 'en' ? 'Generate Hot Post' : '生成热点推文' }}
+                    </h3>
+                    
+                    <div class="space-y-4">
+                      <!-- Topic Input -->
+                      <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                          {{ currentLanguage === 'en' ? 'Topic / Keyword' : '话题 / 关键词' }}
+                        </label>
+                        <input 
+                          v-model="hotNewsTopic"
+                          type="text" 
+                          :placeholder="currentLanguage === 'en' ? 'e.g., China AI Development' : '例如：中国人工智能发展'"
+                          class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                          @keyup.enter="generateHotPost"
+                        />
+                      </div>
+                      
+                      <!-- Style & Length -->
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                            {{ currentLanguage === 'en' ? 'Style' : '风格' }}
+                          </label>
+                          <select 
+                            v-model="hotNewsStyle"
+                            class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                          >
+                            <option value="professional">{{ currentLanguage === 'en' ? 'Professional' : '专业' }}</option>
+                            <option value="casual">{{ currentLanguage === 'en' ? 'Casual' : '轻松' }}</option>
+                            <option value="academic">{{ currentLanguage === 'en' ? 'Academic' : '学术' }}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-slate-600 mb-1.5">
+                            {{ currentLanguage === 'en' ? 'Length' : '长度' }}
+                          </label>
+                          <select 
+                            v-model="hotNewsLength"
+                            class="w-full rounded-lg border-slate-200 bg-white text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                          >
+                            <option value="short">{{ currentLanguage === 'en' ? 'Short (100-200)' : '短 (100-200字)' }}</option>
+                            <option value="medium">{{ currentLanguage === 'en' ? 'Medium (300-500)' : '中 (300-500字)' }}</option>
+                            <option value="long">{{ currentLanguage === 'en' ? 'Long (500-800)' : '长 (500-800字)' }}</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      <!-- Options -->
+                      <div class="flex items-center space-x-4">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            v-model="hotNewsGenerateScript"
+                            type="checkbox"
+                            class="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-2 focus:ring-orange-500/20"
+                          />
+                          <span class="text-sm text-slate-700">
+                            {{ currentLanguage === 'en' ? 'Generate video script' : '生成视频脚本' }}
+                          </span>
+                        </label>
+                      </div>
+                      
+                      <!-- Generate Button -->
+                      <button
+                        @click="generateHotPost"
+                        :disabled="!hotNewsTopic.trim() || hotNewsGenerating"
+                        :class="[
+                          'w-full py-3 rounded-lg font-medium transition-all flex items-center justify-center',
+                          hotNewsTopic.trim() && !hotNewsGenerating
+                            ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:shadow-lg hover:shadow-orange-200/50'
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        ]"
+                      >
+                        <Zap v-if="!hotNewsGenerating" class="w-4 h-4 mr-2" />
+                        <Loader2 v-else class="w-4 h-4 mr-2 animate-spin" />
+                        {{ hotNewsGenerating 
+                          ? (currentLanguage === 'en' ? 'Generating...' : '生成中...') 
+                          : (currentLanguage === 'en' ? 'Generate Post' : '生成推文')
+                        }}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- Generated Post Result -->
+                  <div v-if="hotNewsResult" class="bg-white rounded-xl border border-slate-100 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-md font-semibold text-slate-800">
+                        {{ currentLanguage === 'en' ? 'Generated Post' : '生成的推文' }}
+                      </h3>
+                      <button
+                        @click="copyToClipboard(hotNewsResult.post_content)"
+                        class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors"
+                      >
+                        <Copy class="w-4 h-4" />
+                        {{ currentLanguage === 'en' ? 'Copy' : '复制' }}
+                      </button>
+                    </div>
+                    
+                    <div class="prose prose-sm max-w-none mb-4">
+                      <div class="whitespace-pre-wrap text-slate-700 leading-relaxed">{{ hotNewsResult.post_content }}</div>
+                    </div>
+                    
+                    <!-- Tags -->
+                    <div v-if="hotNewsResult.tags && hotNewsResult.tags.length > 0" class="flex flex-wrap gap-2 mb-4">
+                      <span 
+                        v-for="tag in hotNewsResult.tags" 
+                        :key="tag"
+                        class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium"
+                      >
+                        {{ tag }}
+                      </span>
+                    </div>
+                    
+                    <!-- Video Script (if generated) -->
+                    <div v-if="hotNewsResult.script_content" class="mt-6 pt-6 border-t border-slate-100">
+                      <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-slate-800">
+                          {{ currentLanguage === 'en' ? 'Video Script' : '视频脚本' }}
+                        </h4>
+                        <button
+                          @click="copyToClipboard(hotNewsResult.script_content)"
+                          class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-lg transition-colors"
+                        >
+                          <Copy class="w-3 h-3" />
+                          {{ currentLanguage === 'en' ? 'Copy' : '复制' }}
+                        </button>
+                      </div>
+                      <div class="bg-slate-50 rounded-lg p-4">
+                        <div class="whitespace-pre-wrap text-slate-700 text-sm leading-relaxed">{{ hotNewsResult.script_content }}</div>
+                      </div>
+                    </div>
+                    
+                    <!-- Sources -->
+                    <div v-if="hotNewsResult.sources && hotNewsResult.sources.length > 0" class="mt-6 pt-6 border-t border-slate-100">
+                      <h4 class="text-sm font-semibold text-slate-800 mb-3">
+                        {{ currentLanguage === 'en' ? 'Sources' : '信息来源' }}
+                      </h4>
+                      <div class="space-y-2">
+                        <a 
+                          v-for="(source, idx) in hotNewsResult.sources" 
+                          :key="idx"
+                          :href="source.url"
+                          target="_blank"
+                          class="block p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors group"
+                        >
+                          <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                              <p class="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{{ source.title }}</p>
+                              <p class="text-xs text-slate-500 mt-1">{{ source.source }}</p>
+                            </div>
+                            <ExternalLink class="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors flex-shrink-0 ml-2" />
+                          </div>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Right Panel: Trending Topics & Latest News -->
+                <div class="space-y-6">
+                  <!-- Trending Topics -->
+                  <div class="bg-white rounded-xl border border-slate-100 p-5">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-md font-semibold text-slate-800 flex items-center">
+                        <TrendingUp class="w-4 h-4 mr-2 text-red-500" />
+                        {{ currentLanguage === 'en' ? 'Trending Now' : '实时热点' }}
+                      </h3>
+                      <button
+                        @click="fetchTrendingTopics"
+                        :disabled="loadingTrending"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                      >
+                        <RefreshCw :class="['w-4 h-4 text-slate-500', loadingTrending ? 'animate-spin' : '']" />
+                      </button>
+                    </div>
+                    
+                    <!-- Loading -->
+                    <div v-if="loadingTrending" class="flex items-center justify-center py-8">
+                      <Loader2 class="w-6 h-6 text-orange-500 animate-spin" />
+                    </div>
+                    
+                    <!-- Trending List -->
+                    <div v-else-if="trendingTopics.length > 0" class="space-y-3 max-h-[400px] overflow-y-auto">
+                      <div 
+                        v-for="(topic, idx) in trendingTopics" 
+                        :key="idx"
+                        class="p-3 bg-slate-50 hover:bg-orange-50 rounded-lg transition-all border border-transparent hover:border-orange-200 group"
+                      >
+                        <div class="flex items-start">
+                          <span class="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 text-white text-xs font-bold rounded-full flex items-center justify-center mr-2">
+                            {{ idx + 1 }}
+                          </span>
+                          <div class="flex-1 min-w-0 cursor-pointer" @click="generatePostFromTrending(topic)">
+                            <p class="text-sm font-medium text-slate-700 group-hover:text-orange-600 transition-colors line-clamp-2">
+                              {{ topic.title }}
+                            </p>
+                            <p class="text-xs text-slate-500 mt-1 line-clamp-1">{{ topic.description }}</p>
+                          </div>
+                          <div class="flex items-center gap-1 ml-2">
+                            <button
+                              @click.stop="viewTrendingDetail(topic)"
+                              class="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+                              title="查看详情"
+                            >
+                              <ExternalLink class="w-3.5 h-3.5 text-slate-400 hover:text-blue-600" />
+                            </button>
+                            <button
+                              @click.stop="saveTrendingToKB(topic)"
+                              class="p-1.5 hover:bg-green-100 rounded-lg transition-colors"
+                              title="保存到知识库"
+                            >
+                              <Save class="w-3.5 h-3.5 text-slate-400 hover:text-green-600" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div v-else class="text-center py-8">
+                      <p class="text-sm text-slate-500">{{ currentLanguage === 'en' ? 'No trending topics' : '暂无热点话题' }}</p>
+                    </div>
+                  </div>
+                  
+                  <!-- Latest News -->
+                  <div class="bg-white rounded-xl border border-slate-100 p-5">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-md font-semibold text-slate-800 flex items-center">
+                        <Newspaper class="w-4 h-4 mr-2 text-blue-500" />
+                        {{ currentLanguage === 'en' ? 'Latest News' : '最新新闻' }}
+                      </h3>
+                      <div class="flex items-center gap-2">
+                        <button
+                          @click="toggleNewsSourceSelector"
+                          class="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                          :title="currentLanguage === 'zh' ? '选择新闻源' : 'Select News Sources'"
+                        >
+                          <Settings class="w-4 h-4 text-slate-500" />
+                        </button>
+                        <button
+                          @click="fetchLatestNews"
+                          :disabled="loadingNews"
+                          class="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                          <RefreshCw :class="['w-4 h-4 text-slate-500', loadingNews ? 'animate-spin' : '']" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- News Source Selector -->
+                    <div v-if="showNewsSourceSelector" class="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-medium text-slate-700">
+                          {{ currentLanguage === 'zh' ? '选择新闻频道' : 'Select News Channels' }}
+                        </span>
+                        <button
+                          @click="selectAllNewsSources"
+                          class="text-xs text-indigo-600 hover:text-indigo-700"
+                        >
+                          {{ selectedNewsSources.length === availableNewsSources.length ? (currentLanguage === 'zh' ? '取消全选' : 'Deselect All') : (currentLanguage === 'zh' ? '全选' : 'Select All') }}
+                        </button>
+                      </div>
+                      <div v-if="loadingNewsSources" class="flex items-center justify-center py-4">
+                        <Loader2 class="w-5 h-5 text-slate-400 animate-spin" />
+                      </div>
+                      <div v-else class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                        <label 
+                          v-for="source in availableNewsSources" 
+                          :key="source.name"
+                          class="flex items-center gap-2 p-2 rounded hover:bg-white cursor-pointer text-xs"
+                        >
+                          <input
+                            type="checkbox"
+                            :value="source.name"
+                            v-model="selectedNewsSources"
+                            class="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                          />
+                          <span class="text-slate-700 truncate" :title="source.name">{{ source.name }}</span>
+                        </label>
+                      </div>
+                      <div class="mt-3 flex justify-end">
+                        <button
+                          @click="applyNewsSourceFilter"
+                          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg transition-colors"
+                        >
+                          {{ currentLanguage === 'zh' ? '应用筛选' : 'Apply Filter' }}
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- Loading -->
+                    <div v-if="loadingNews" class="flex items-center justify-center py-8">
+                      <Loader2 class="w-6 h-6 text-blue-500 animate-spin" />
+                    </div>
+                    
+                    <!-- News List -->
+                    <div v-else-if="latestNews.length > 0" class="space-y-3 max-h-[400px] overflow-y-auto">
+                      <div 
+                        v-for="(news, idx) in latestNews" 
+                        :key="idx"
+                        class="p-3 bg-slate-50 rounded-lg transition-all border border-slate-200 hover:border-blue-300 group"
+                      >
+                        <p class="text-sm font-medium text-slate-700 line-clamp-2 mb-1">
+                          {{ news.title }}
+                        </p>
+                        <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+                          <span>{{ news.source }}</span>
+                          <span>{{ news.published_date ? new Date(news.published_date).toLocaleDateString() : '' }}</span>
+                        </div>
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            @click="viewNewsDetail(news)"
+                            class="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs transition-colors"
+                          >
+                            <FileText class="w-3 h-3" />
+                            {{ currentLanguage === 'en' ? 'View' : '查看' }}
+                          </button>
+                          <button
+                            @click="generatePostFromNews(news)"
+                            class="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded text-xs transition-colors"
+                          >
+                            <Zap class="w-3 h-3" />
+                            {{ currentLanguage === 'en' ? 'Generate' : '生成' }}
+                          </button>
+                          <button
+                            @click="saveNewsToKB(news)"
+                            class="flex items-center justify-center gap-1 px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs transition-colors"
+                          >
+                            <Database class="w-3 h-3" />
+                            {{ currentLanguage === 'en' ? 'Save' : '存储' }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div v-else class="text-center py-8">
+                      <p class="text-sm text-slate-500">{{ currentLanguage === 'en' ? 'No news available' : '暂无新闻' }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- News Detail Modal -->
+            <div 
+              v-if="showNewsDetail" 
+              class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              @click.self="closeNewsDetail"
+            >
+              <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                <!-- Header -->
+                <div class="flex items-center justify-between p-6 border-b border-slate-100">
+                  <h3 class="text-xl font-semibold text-slate-800">
+                    {{ currentLanguage === 'en' ? 'News Detail' : '新闻详情' }}
+                  </h3>
+                  <button 
+                    @click="closeNewsDetail"
+                    class="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <X class="w-5 h-5 text-slate-500" />
+                  </button>
+                </div>
+                
+                <!-- Content -->
+                <div v-if="selectedNewsDetail" class="flex-1 overflow-y-auto p-6">
+                  <!-- Title -->
+                  <h2 class="text-2xl font-bold text-slate-800 mb-4">
+                    {{ selectedNewsDetail.title }}
+                  </h2>
+                  
+                  <!-- Meta Info -->
+                  <div class="flex items-center gap-4 text-sm text-slate-500 mb-6 pb-4 border-b border-slate-100">
+                    <div class="flex items-center gap-1">
+                      <Newspaper class="w-4 h-4" />
+                      <span>{{ selectedNewsDetail.source }}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <Clock class="w-4 h-4" />
+                      <span>{{ selectedNewsDetail.published_date ? new Date(selectedNewsDetail.published_date).toLocaleString() : 'N/A' }}</span>
+                    </div>
+                    <div v-if="selectedNewsDetail.score" class="flex items-center gap-1">
+                      <TrendingUp class="w-4 h-4" />
+                      <span>{{ (selectedNewsDetail.score * 100).toFixed(1) }}%</span>
+                    </div>
+                  </div>
+                  
+                  <!-- Description / Content -->
+                  <div class="mb-6">
+                    <div class="flex items-center justify-between mb-3">
+                      <h4 class="text-sm font-semibold text-slate-700">
+                        {{ currentLanguage === 'en' ? 'Content' : '内容' }}
+                      </h4>
+                      <button
+                        v-if="!selectedNewsDetail.fullContent && (selectedNewsDetail.link || selectedNewsDetail.url)"
+                        @click="fetchNewsFullContent"
+                        :disabled="loadingNewsContent"
+                        class="text-xs text-blue-600 hover:text-blue-700 flex items-center"
+                      >
+                        <Loader2 v-if="loadingNewsContent" class="w-3 h-3 mr-1 animate-spin" />
+                        <RefreshCw v-else class="w-3 h-3 mr-1" />
+                        {{ loadingNewsContent ? (currentLanguage === 'zh' ? '获取中...' : 'Fetching...') : (currentLanguage === 'zh' ? '获取全文' : 'Fetch Full Content') }}
+                      </button>
+                    </div>
+                    <div v-if="selectedNewsDetail.fullContent || selectedNewsDetail.description" class="prose prose-slate max-w-none">
+                      <p class="text-slate-600 leading-relaxed whitespace-pre-wrap">
+                        {{ selectedNewsDetail.fullContent || selectedNewsDetail.description }}
+                      </p>
+                    </div>
+                    <div v-else class="text-center py-8 bg-slate-50 rounded-lg">
+                      <p class="text-sm text-slate-500">
+                        {{ currentLanguage === 'zh' ? '暂无内容摘要，点击"获取全文"尝试抓取原文内容' : 'No content summary. Click "Fetch Full Content" to try fetching the original article.' }}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <!-- Original Link -->
+                  <div v-if="selectedNewsDetail.link || selectedNewsDetail.url" class="mb-6 p-4 bg-slate-50 rounded-lg">
+                    <h4 class="text-sm font-semibold text-slate-700 mb-2">
+                      {{ currentLanguage === 'en' ? 'Source Link' : '原文链接' }}
+                    </h4>
+                    <a 
+                      :href="selectedNewsDetail.link || selectedNewsDetail.url" 
+                      target="_blank"
+                      class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline break-all"
+                    >
+                      <ExternalLink class="w-4 h-4 flex-shrink-0" />
+                      <span class="text-sm">{{ selectedNewsDetail.link || selectedNewsDetail.url }}</span>
+                    </a>
+                  </div>
+                </div>
+                
+                <!-- Footer Actions -->
+                <div class="flex items-center justify-end gap-3 p-6 border-t border-slate-100 bg-slate-50">
+                  <button
+                    @click="saveNewsDetailToKB(); closeNewsDetail()"
+                    :disabled="savingNewsToKB"
+                    class="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Database class="w-4 h-4" />
+                    {{ savingNewsToKB 
+                      ? (currentLanguage === 'en' ? 'Saving...' : '保存中...') 
+                      : (currentLanguage === 'en' ? 'Save to Knowledge Base' : '保存到知识库')
+                    }}
+                  </button>
+                  <button
+                    @click="generatePostFromDetail(); closeNewsDetail()"
+                    class="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+                  >
+                    <Zap class="w-4 h-4" />
+                    {{ currentLanguage === 'en' ? 'Generate Post' : '生成推文' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Email Marketing Content -->
+            <div v-else-if="activeTab === 'email'" class="h-full flex flex-col">
+              <div class="mb-8 border-b border-slate-50 pb-6">
+                <h2 class="text-xl font-medium text-slate-700 mb-2">{{ t('emailMarketing') }}</h2>
+                <p class="text-slate-500 font-light">
+                  {{ currentLanguage === 'en' ? 'Manage email subscribers, templates, and send newsletters to engaged users.' : '管理邮件订阅者、模板，并向活跃用户发送新闻简报。' }}
+                </p>
+              </div>
+
+              <!-- Email Marketing Tabs -->
+              <div class="mb-6">
+                <div class="border-b border-slate-200">
+                  <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button 
+                      v-for="tab in emailTabs" 
+                      :key="tab.id"
+                      @click="currentEmailTab = tab.id"
+                      :class="[
+                        currentEmailTab === tab.id
+                          ? 'border-indigo-500 text-indigo-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300',
+                        'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+                      ]"
+                    >
+                      {{ tab.name }}
+                    </button>
+                  </nav>
+                </div>
+              </div>
+
+              <!-- Tab Content -->
+              <div class="flex-1 overflow-y-auto">
+                
+                <!-- Subscribers Tab -->
+                <div v-if="currentEmailTab === 'subscribers'">
+                  <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-medium text-slate-900">{{ currentLanguage === 'zh' ? '订阅用户列表' : 'Subscriber List' }}</h3>
+                    <div class="flex gap-2">
+                      <input 
+                        type="file" 
+                        ref="emailFileInput" 
+                        class="hidden" 
+                        accept=".csv,.xlsx,.xls" 
+                        @change="handleEmailFileUpload"
+                      >
+                      <button 
+                        @click="$refs.emailFileInput.click()"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        {{ currentLanguage === 'zh' ? '导入 Excel/CSV' : 'Import Excel/CSV' }}
+                      </button>
+                      <button 
+                        @click="fetchEmailSubscribers"
+                        class="inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50"
+                      >
+                        {{ currentLanguage === 'zh' ? '刷新' : 'Refresh' }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-if="emailLoading" class="text-center py-10">{{ currentLanguage === 'zh' ? '加载中...' : 'Loading...' }}</div>
+                  
+                  <div v-else class="bg-white shadow overflow-hidden sm:rounded-lg">
+                    <table class="min-w-full divide-y divide-slate-200">
+                      <thead class="bg-slate-50">
+                        <tr>
+                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ currentLanguage === 'zh' ? '邮箱' : 'Email' }}</th>
+                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ currentLanguage === 'zh' ? '姓名' : 'Name' }}</th>
+                          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ currentLanguage === 'zh' ? '状态' : 'Status' }}</th>
+                          <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">{{ currentLanguage === 'zh' ? '操作' : 'Actions' }}</th>
+                        </tr>
+                      </thead>
+                      <tbody class="bg-white divide-y divide-slate-200">
+                        <tr v-for="sub in emailSubscribers" :key="sub.id">
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ sub.id }}</td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{{ sub.email }}</td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{{ sub.name || '-' }}</td>
+                          <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                            <span :class="sub.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                              {{ sub.is_active ? (currentLanguage === 'zh' ? '活跃' : 'Active') : (currentLanguage === 'zh' ? '停用' : 'Inactive') }}
+                            </span>
+                          </td>
+                          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button @click="deleteEmailSubscriber(sub.id)" class="text-red-600 hover:text-red-900">{{ currentLanguage === 'zh' ? '删除' : 'Delete' }}</button>
+                          </td>
+                        </tr>
+                        <tr v-if="emailSubscribers.length === 0">
+                          <td colspan="5" class="px-6 py-4 text-center text-sm text-slate-500">{{ currentLanguage === 'zh' ? '暂无数据' : 'No data' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Templates Tab -->
+                <div v-else-if="currentEmailTab === 'templates'">
+                  <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-lg font-medium text-slate-900">{{ currentLanguage === 'zh' ? '邮件模板管理' : 'Email Templates' }}</h3>
+                    <button 
+                      @click="openEmailTemplateModal()"
+                      class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                    >
+                      {{ currentLanguage === 'zh' ? '新建模板' : 'New Template' }}
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div 
+                      v-for="tpl in emailTemplates" 
+                      :key="tpl.id"
+                      class="relative rounded-lg border border-slate-300 bg-white px-6 py-5 shadow-sm flex flex-col justify-between hover:border-indigo-500"
+                    >
+                      <div>
+                        <h4 class="text-sm font-medium text-slate-900">{{ tpl.name }}</h4>
+                        <p class="mt-1 text-sm text-slate-500 truncate">{{ currentLanguage === 'zh' ? '主题' : 'Subject' }}: {{ tpl.subject }}</p>
+                        <div class="mt-2 text-xs text-slate-400">{{ currentLanguage === 'zh' ? '更新于' : 'Updated' }}: {{ new Date(tpl.updated_at || tpl.created_at).toLocaleString() }}</div>
+                      </div>
+                      <div class="mt-4 flex justify-end gap-2">
+                        <button @click="openEmailTemplateModal(tpl)" class="text-indigo-600 hover:text-indigo-900 text-sm">{{ currentLanguage === 'zh' ? '编辑' : 'Edit' }}</button>
+                        <button @click="deleteEmailTemplate(tpl.id)" class="text-red-600 hover:text-red-900 text-sm">{{ currentLanguage === 'zh' ? '删除' : 'Delete' }}</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Send Tab -->
+                <div v-else-if="currentEmailTab === 'send'">
+                  <div class="max-w-2xl mx-auto">
+                    <h3 class="text-lg font-medium text-slate-900 mb-6">{{ currentLanguage === 'zh' ? '发送邮件' : 'Send Email' }}</h3>
+                    
+                    <div class="space-y-6">
+                      <div>
+                        <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '选择模板' : 'Select Template' }}</label>
+                        <select v-model="emailSendForm.template_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                          <option v-for="tpl in emailTemplates" :key="tpl.id" :value="tpl.id">{{ tpl.name }} - {{ tpl.subject }}</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '发送对象' : 'Send To' }}</label>
+                        <div class="mt-2 space-y-2">
+                          <div class="flex items-center">
+                            <input id="send-all" name="send-type" type="radio" value="all" v-model="emailSendForm.type" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-slate-300">
+                            <label for="send-all" class="ml-3 block text-sm font-medium text-slate-700">
+                              {{ currentLanguage === 'zh' ? '所有活跃订阅用户' : 'All Active Subscribers' }} ({{ emailSubscribers.length }} {{ currentLanguage === 'zh' ? '人' : 'users' }})
+                            </label>
+                          </div>
+                          <div class="flex items-center">
+                            <input id="send-test" name="send-type" type="radio" value="test" v-model="emailSendForm.type" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-slate-300">
+                            <label for="send-test" class="ml-3 block text-sm font-medium text-slate-700">
+                              {{ currentLanguage === 'zh' ? '发送测试邮件' : 'Send Test Email' }}
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div v-if="emailSendForm.type === 'test'">
+                        <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '测试邮箱地址' : 'Test Email Address' }}</label>
+                        <input type="email" v-model="emailSendForm.test_email" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                      </div>
+
+                      <div class="pt-4">
+                        <button 
+                          @click="sendEmail"
+                          :disabled="emailSending || !emailSendForm.template_id"
+                          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-slate-400"
+                        >
+                          {{ emailSending ? (currentLanguage === 'zh' ? '发送中...' : 'Sending...') : (currentLanguage === 'zh' ? '确认发送' : 'Confirm Send') }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div v-else-if="currentEmailTab === 'settings'">
+                  <div class="max-w-2xl mx-auto">
+                    <h3 class="text-lg font-medium text-slate-900 mb-6">{{ currentLanguage === 'zh' ? 'SMTP 发件配置' : 'SMTP Configuration' }}</h3>
+                    
+                    <div class="space-y-4">
+                      <!-- 预设配置选择器 -->
+                      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <label class="block text-sm font-medium text-blue-900 mb-2">
+                          {{ currentLanguage === 'zh' ? '📧 选择常用邮件服务商（可选）' : '📧 Choose Email Provider (Optional)' }}
+                        </label>
+                        <select 
+                          @change="applySmtpPreset($event)"
+                          class="block w-full border border-blue-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
+                        >
+                          <option value="">{{ currentLanguage === 'zh' ? '-- 选择预设或手动配置 --' : '-- Select preset or configure manually --' }}</option>
+                          <option value="gmail">Gmail (Google)</option>
+                          <option value="outlook">Outlook / Hotmail (Microsoft)</option>
+                          <option value="office365">Office 365 (Exchange)</option>
+                          <option value="163">163.com (网易)</option>
+                          <option value="qq">QQ Mail (腾讯)</option>
+                          <option value="yahoo">Yahoo Mail</option>
+                          <option value="icloud">iCloud Mail (Apple)</option>
+                        </select>
+                        <p class="mt-2 text-xs text-blue-700">
+                          {{ currentLanguage === 'zh' ? '💡 选择后会自动填入服务器地址和端口，您只需填写用户名和密码' : '💡 Server and port will be auto-filled. Just enter your username and password' }}
+                        </p>
+                      </div>
+                      
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? 'SMTP 服务器' : 'SMTP Server' }}</label>
+                          <input type="text" v-model="emailConfigForm.smtp_server" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '端口' : 'Port' }}</label>
+                          <input type="number" v-model="emailConfigForm.smtp_port" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '用户名' : 'Username' }}</label>
+                        <input type="text" v-model="emailConfigForm.smtp_username" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                      </div>
+
+                      <div>
+                        <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '密码' : 'Password' }}</label>
+                        <input type="password" v-model="emailConfigForm.smtp_password" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                      </div>
+
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '发件人邮箱' : 'Sender Email' }}</label>
+                          <input type="email" v-model="emailConfigForm.sender_email" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                          <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '发件人名称' : 'Sender Name' }}</label>
+                          <input type="text" v-model="emailConfigForm.sender_name" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                      </div>
+
+                      <div class="flex items-center">
+                        <input id="use-tls" type="checkbox" v-model="emailConfigForm.use_tls" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded">
+                        <label for="use-tls" class="ml-2 block text-sm text-slate-900">{{ currentLanguage === 'zh' ? '使用 TLS' : 'Use TLS' }}</label>
+                      </div>
+
+                      <div class="pt-4 space-y-3">
+                        <button 
+                          @click="handleTestConnection"
+                          :disabled="emailSending"
+                          class="w-full flex justify-center items-center py-2 px-4 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                        >
+                          <svg v-if="!emailSending" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <Loader2 v-else class="w-4 h-4 mr-2 animate-spin" />
+                          {{ emailSending ? (currentLanguage === 'zh' ? '测试中...' : 'Testing...') : (currentLanguage === 'zh' ? '🧪 测试连接' : '🧪 Test Connection') }}
+                        </button>
+                        
+                        <button 
+                          @click="saveEmailConfig"
+                          :disabled="emailSending"
+                          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                        >
+                          {{ currentLanguage === 'zh' ? '💾 保存配置' : '💾 Save Configuration' }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
             <!-- Integrated Voiceover Content -->
             <div v-else-if="activeTab === 'integrated'" class="h-full flex flex-col">
               <div class="mb-8 border-b border-slate-50 pb-6 flex justify-between items-end">
@@ -913,6 +2294,13 @@
                     {{ t('integratedVoiceoverDesc') }}
                   </p>
                 </div>
+                <button
+                  @click="showIntegratedHistory = true; fetchIntegratedHistory()"
+                  class="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                >
+                  <Clock class="w-4 h-4" />
+                  {{ t('viewHistory') }}
+                </button>
               </div>
 
               <!-- Upload Form (if no task running) -->
@@ -956,7 +2344,7 @@
                     </div>
 
                     <!-- Structure & Options -->
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                       <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">{{ t('structurePreference') }}</label>
                         <select
@@ -968,6 +2356,21 @@
                           <option value="S2">S2 - Timeline</option>
                           <option value="S3">S3 - Status-Mechanism-Strategy</option>
                           <option value="S4">S4 - Mechanism Chain</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">
+                          {{ currentLanguage === 'zh' ? '字数限制' : 'Word Limit' }}
+                          <span class="text-xs text-slate-400 ml-1">({{ currentLanguage === 'zh' ? '可选' : 'Optional' }})</span>
+                        </label>
+                        <select
+                          v-model="integratedForm.word_limit"
+                          class="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+                        >
+                          <option :value="null">{{ currentLanguage === 'zh' ? '默认（推荐）' : 'Default (Recommended)' }}</option>
+                          <option :value="2000">2000 {{ currentLanguage === 'zh' ? '字' : 'words' }}</option>
+                          <option :value="3000">3000 {{ currentLanguage === 'zh' ? '字' : 'words' }}</option>
+                          <option :value="4000">4000 {{ currentLanguage === 'zh' ? '字' : 'words' }}</option>
                         </select>
                       </div>
                       <div class="flex items-end">
@@ -1232,6 +2635,13 @@
 
                     <!-- Visual Assets -->
                     <div v-else-if="integratedResultTab === 'assets'">
+                      <div v-if="integratedResult.visual_asset_ledger" style="display:none">
+                        {{ console.log('[Visual Assets] Ledger:', integratedResult.visual_asset_ledger) }}
+                        {{ console.log('[Visual Assets] Assets count:', integratedResult.visual_asset_ledger.assets?.length) }}
+                        {{ integratedResult.visual_asset_ledger.assets?.forEach((asset: any, idx: number) => {
+                          console.log(`[Visual Assets] Asset ${idx}:`, asset.asset_id, 'image_url:', asset.image_url);
+                        }) }}
+                      </div>
                       <div v-if="!integratedResult.visual_asset_ledger?.assets || integratedResult.visual_asset_ledger.assets.length === 0" 
                         class="bg-slate-50 rounded-lg p-12 text-center border-2 border-dashed border-slate-200">
                         <div class="text-slate-400 mb-2">
@@ -1265,7 +2675,7 @@
                           
                           <!-- Asset Content -->
                           <div class="p-4 space-y-3">
-                            <!-- Image Preview (if available) -->
+                            <!-- Image Preview (for FIG type) -->
                             <div v-if="asset.image_url && asset.asset_type === 'FIG'" class="mb-3">
                               <img 
                                 :src="getImageUrl(asset.image_url)" 
@@ -1275,11 +2685,72 @@
                                 loading="lazy"
                               />
                             </div>
-                            <div v-else-if="asset.asset_type === 'FIG'" class="mb-3 bg-slate-100 rounded-lg p-8 text-center">
+                            <div v-else-if="asset.asset_type === 'FIG' && !asset.image_url" class="mb-3 bg-slate-100 rounded-lg p-8 text-center">
                               <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mx-auto text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                               <p class="text-xs text-slate-400 mt-2">{{ currentLanguage === 'zh' ? '图片未能提取' : 'Image not extracted' }}</p>
+                            </div>
+                            
+                            <!-- Table Preview (for TAB type) -->
+                            <div v-else-if="asset.asset_type === 'TAB'" class="mb-3">
+                              <!-- If table has raw_text or content -->
+                              <div v-if="asset.raw_text || asset.table_content" class="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                                <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                  <span class="text-xs font-medium text-slate-600">{{ currentLanguage === 'zh' ? '表格内容' : 'Table Content' }}</span>
+                                </div>
+                                <div class="p-3 max-h-48 overflow-auto">
+                                  <pre class="text-xs text-slate-600 whitespace-pre-wrap font-mono">{{ asset.raw_text || asset.table_content }}</pre>
+                                </div>
+                              </div>
+                              <!-- If table has structured data -->
+                              <div v-else-if="asset.table_data && asset.table_data.length > 0" class="overflow-x-auto">
+                                <table class="min-w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                                  <thead class="bg-slate-100">
+                                    <tr>
+                                      <th v-for="(header, idx) in (asset.table_data[0] || [])" :key="idx" class="px-2 py-1.5 text-left font-medium text-slate-700 border-b border-slate-200">
+                                        {{ header }}
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr v-for="(row, rowIdx) in asset.table_data.slice(1)" :key="rowIdx" class="hover:bg-slate-50">
+                                      <td v-for="(cell, cellIdx) in row" :key="cellIdx" class="px-2 py-1.5 text-slate-600 border-b border-slate-100">
+                                        {{ cell }}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                              <!-- If table has location_anchor (fallback for table content) -->
+                              <div v-else-if="asset.location_anchor" class="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                                <div class="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-2 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                  <span class="text-xs font-medium text-slate-600">{{ currentLanguage === 'zh' ? '表格预览' : 'Table Preview' }}</span>
+                                </div>
+                                <div class="p-3 max-h-48 overflow-auto">
+                                  <table v-if="asset.location_anchor.includes('|')" class="min-w-full text-xs border-collapse">
+                                    <tbody>
+                                      <tr v-for="(cell, idx) in asset.location_anchor.split('|').filter((c: string) => c.trim())" :key="idx" class="border-b border-slate-200">
+                                        <td class="px-2 py-1.5 text-slate-600 font-mono">{{ cell.trim() }}</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                  <pre v-else class="text-xs text-slate-600 whitespace-pre-wrap font-mono">{{ asset.location_anchor }}</pre>
+                                </div>
+                              </div>
+                              <!-- Fallback: show placeholder -->
+                              <div v-else class="bg-green-50 rounded-lg p-6 text-center border border-green-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 mx-auto text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <p class="text-xs text-green-600 mt-2">{{ currentLanguage === 'zh' ? '表格数据' : 'Table Data' }}</p>
+                              </div>
                             </div>
                             
                             <!-- Caption/Title -->
@@ -1289,11 +2760,11 @@
                             </div>
                             
                             <!-- Key Numbers -->
-                            <div v-if="asset.key_numbers && asset.key_numbers.length > 0">
+                            <div v-if="filterValidKeyNumbers(asset.key_numbers).length > 0">
                               <div class="text-xs font-medium text-slate-500 uppercase mb-2">{{ t('keyNumbers') }}</div>
                               <div class="flex flex-wrap gap-2">
                                 <span
-                                  v-for="(num, idx) in asset.key_numbers"
+                                  v-for="(num, idx) in filterValidKeyNumbers(asset.key_numbers)"
                                   :key="idx"
                                   class="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-mono"
                                 >
@@ -1402,13 +2873,15 @@
                             <div v-if="section.related_assets && section.related_assets.length > 0" class="pt-2">
                               <div class="text-xs font-medium text-slate-500 uppercase mb-2">{{ t('relatedAssets') }}</div>
                               <div class="flex flex-wrap gap-2">
-                                <span
+                                <button
                                   v-for="assetId in section.related_assets"
                                   :key="assetId"
-                                  class="inline-flex items-center px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs font-medium"
+                                  @click="openAssetDetail(assetId)"
+                                  class="inline-flex items-center px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs font-medium hover:bg-purple-100 hover:shadow-sm transition-all cursor-pointer"
+                                  :title="currentLanguage === 'zh' ? '点击查看资产详情' : 'Click to view asset details'"
                                 >
-                                  📊 {{ assetId }}
-                                </span>
+                                  {{ assetId.includes('FIG') ? '📊' : '📋' }} {{ assetId }}
+                                </button>
                               </div>
                             </div>
                             
@@ -1444,7 +2917,7 @@
                         </div>
                       </div>
                       <div class="bg-white rounded-lg border border-slate-200 p-8 shadow-sm">
-                        <div class="script-content" v-html="formatScriptText(integratedResult.script_review)"></div>
+                        <div class="script-content" v-html="formatScriptText(integratedResult.script_review)" @click="handleScriptContentClick"></div>
                       </div>
                     </div>
 
@@ -1461,67 +2934,173 @@
                               <div class="text-xs text-indigo-700">{{ t('finalVersionDesc') }}</div>
                             </div>
                           </div>
-                          <button
-                            @click="copyIntegratedContent(integratedResult.script_final)"
-                            class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium shadow-sm"
-                          >
-                            📋 {{ t('copy') }}
-                          </button>
+                          <div class="flex items-center space-x-2">
+                            <button
+                              @click="openIntegratedTagModal"
+                              :disabled="isSavingIntegratedToKB"
+                              class="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span v-if="isSavingIntegratedToKB">⏳ {{ currentLanguage === 'zh' ? '保存中...' : 'Saving...' }}</span>
+                              <span v-else>💾 {{ currentLanguage === 'zh' ? '存入知识库' : 'Save to KB' }}</span>
+                            </button>
+                            <button
+                              @click="downloadIntegratedFinal"
+                              class="px-4 py-2 text-sm bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg transition-colors font-medium shadow-sm"
+                            >
+                              📥 PDF
+                            </button>
+                            <button
+                              @click="downloadIntegratedWord"
+                              class="px-4 py-2 text-sm bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 rounded-lg transition-colors font-medium shadow-sm"
+                            >
+                              📄 Word
+                            </button>
+                            <button
+                              v-if="!isEditingIntegratedFinal"
+                              @click="startEditIntegratedFinal"
+                              class="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors font-medium shadow-sm"
+                            >
+                              ✏️ {{ currentLanguage === 'zh' ? '编辑' : 'Edit' }}
+                            </button>
+                            <template v-else>
+                              <button
+                                @click="saveEditIntegratedFinal"
+                                class="px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium shadow-sm"
+                              >
+                                ✅ {{ currentLanguage === 'zh' ? '保存' : 'Save' }}
+                              </button>
+                              <button
+                                @click="cancelEditIntegratedFinal"
+                                class="px-4 py-2 text-sm bg-slate-400 hover:bg-slate-500 text-white rounded-lg transition-colors font-medium shadow-sm"
+                              >
+                                ❌ {{ currentLanguage === 'zh' ? '取消' : 'Cancel' }}
+                              </button>
+                            </template>
+                            <button
+                              @click="copyIntegratedContent(integratedResult.script_final)"
+                              class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                            >
+                              📋 {{ t('copy') }}
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div class="bg-white rounded-lg border border-slate-200 p-8 shadow-sm">
-                        <div class="script-content" v-html="formatScriptText(integratedResult.script_final)"></div>
+                        <!-- 编辑模式 -->
+                        <textarea
+                          v-if="isEditingIntegratedFinal"
+                          v-model="editedIntegratedFinal"
+                          class="w-full h-96 p-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono text-sm resize-y"
+                          :placeholder="currentLanguage === 'zh' ? '编辑口播稿内容...' : 'Edit script content...'"
+                        ></textarea>
+                        <!-- 显示模式 -->
+                        <div v-else class="script-content" v-html="formatScriptText(integratedResult.script_final)" @click="handleScriptContentClick"></div>
+                      </div>
+                      
+                      <!-- Oral Broadcast Section for Final Version -->
+                      <div class="mt-8 pt-6 border-t border-slate-100">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-4 flex items-center">
+                          <svg class="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                          </svg>
+                          {{ t('oralBroadcast') }}
+                        </h4>
+                        
+                        <div class="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                          <div v-if="voices.length === 0" class="text-center py-4">
+                            <p class="text-sm text-slate-500">{{ t('loadingVoices') }}</p>
+                          </div>
+                          <div v-else class="flex flex-col md:flex-row gap-4 items-end">
+                            <div class="flex-1 w-full">
+                              <label class="block text-xs font-medium text-slate-500 mb-1">{{ t('selectVoice') }}</label>
+                              <select v-model="selectedIntegratedVoiceId" class="w-full text-sm rounded-lg border-slate-200 focus:border-indigo-500 focus:ring-indigo-500">
+                                <option v-for="voice in voices" :key="voice.id" :value="voice.id">
+                                  {{ voice.name }}
+                                </option>
+                              </select>
+                            </div>
+                            
+                            <button 
+                              @click="generateIntegratedAudio"
+                              :disabled="isGeneratingIntegratedAudio || !selectedIntegratedVoiceId"
+                              class="w-full md:w-auto px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center whitespace-nowrap"
+                            >
+                              <Loader2 v-if="isGeneratingIntegratedAudio" class="w-4 h-4 mr-2 animate-spin" />
+                              <span v-else class="flex items-center">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                {{ t('generateAndPlay') }}
+                              </span>
+                            </button>
+                          </div>
+                          
+                          <!-- Player Section -->
+                          <div v-if="integratedAudioUrl" class="mt-4 pt-4 border-t border-slate-200">
+                            <div class="flex items-center gap-4">
+                              <audio controls :src="integratedAudioUrl" class="flex-1 h-10 w-full"></audio>
+                              <a 
+                                :href="integratedAudioUrl" 
+                                :download="`integrated_broadcast_${Date.now()}.mp3`"
+                                class="flex-shrink-0 p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                :title="t('downloadAudio')"
+                              >
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <!-- Error Message -->
-                <div v-if="integratedError" class="bg-red-50 border border-red-200 rounded-xl p-6">
-                  <div class="flex items-start space-x-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <h3 class="text-lg font-semibold text-red-800 mb-2">{{ t('generationFailed') }}</h3>
-                      <p class="text-sm text-red-700">{{ integratedError }}</p>
+                <div v-if="integratedError" class="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200 rounded-xl p-6 shadow-sm">
+                  <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div class="flex-1">
+                      <h3 class="text-lg font-bold text-red-900 mb-2">{{ t('generationFailed') }}</h3>
+                      <p class="text-sm text-red-800 mb-4 leading-relaxed">{{ integratedError }}</p>
+                      
+                      <!-- Helpful Tips -->
+                      <div class="bg-white/60 rounded-lg p-4 mb-4 border border-red-200">
+                        <div class="text-xs font-semibold text-red-900 mb-2">💡 {{ t('troubleshootingTips') }}</div>
+                        <ul class="text-xs text-red-800 space-y-1.5 list-disc list-inside">
+                          <li>{{ t('tip1') }}</li>
+                          <li>{{ t('tip2') }}</li>
+                          <li>{{ t('tip3') }}</li>
+                        </ul>
+                      </div>
+                      
+                      <!-- Action Buttons -->
+                      <div class="flex space-x-3">
+                        <button
+                          @click="retryIntegratedGeneration"
+                          class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-all text-sm shadow-sm flex items-center space-x-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>{{ t('retryGeneration') }}</span>
+                        </button>
+                        <button
+                          @click="resetIntegratedForm"
+                          class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-all text-sm"
+                        >
+                          {{ t('backToForm') }}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                <!-- Back Button -->
-                <div class="flex justify-center">
-                  <button
-                    @click="resetIntegratedForm"
-                    class="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-medium rounded-lg hover:border-slate-300 transition-all text-sm"
-                  >
-                    {{ t('back') }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Default Placeholder for other tabs -->
-            <div v-else class="h-full flex flex-col">
-              <div class="mb-8 border-b border-slate-50 pb-6">
-                <h2 class="text-xl font-medium text-slate-700 mb-2">Workspace</h2>
-                <p class="text-slate-500 font-light">
-                  Use the tools on the sidebar to start generating content. This is your high-fidelity canvas.
-                </p>
-              </div>
-
-              <!-- Empty State / Dashboard -->
-              <div class="flex-1 flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
-                <div class="w-16 h-16 bg-white rounded-full shadow-md flex items-center justify-center mb-6">
-                   <component :is="activeItem?.icon" class="w-8 h-8 text-slate-300" />
-                </div>
-                <h3 class="text-lg font-medium text-slate-600 mb-2">Ready to create?</h3>
-                <p class="text-slate-400 max-w-md mb-8">
-                  Select a tool from the sidebar to begin academic extraction, voice synthesis, search, or trend analysis.
-                </p>
-                <button class="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 font-medium rounded-lg shadow-sm hover:border-slate-300 hover:shadow transition-all">
-                  Load Recent Project
-                </button>
               </div>
             </div>
 
@@ -1531,6 +3110,110 @@
       </div>
     </main>
     
+    <!-- Integrated Voiceover Tag Selection Modal -->
+    <div 
+      v-if="showIntegratedTagModal" 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="showIntegratedTagModal = false"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+        <div class="p-6 border-b border-slate-200 bg-gradient-to-r from-green-50 to-emerald-50">
+          <h3 class="text-lg font-semibold text-slate-800 flex items-center">
+            <Tag class="w-5 h-5 mr-2 text-green-600" />
+            {{ currentLanguage === 'zh' ? '选择标签后存入知识库' : 'Select Tags Before Saving' }}
+          </h3>
+          <p class="text-sm text-slate-500 mt-1">
+            {{ currentLanguage === 'zh' ? '选择或添加标签，便于后续检索' : 'Select or add tags for easier retrieval' }}
+          </p>
+        </div>
+        
+        <div class="p-6 space-y-4">
+          <!-- Generate Tags Button -->
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-700">
+              {{ currentLanguage === 'zh' ? '推荐标签' : 'Recommended Tags' }}
+            </span>
+            <button
+              @click="fetchIntegratedRecommendedTags"
+              :disabled="loadingIntegratedTags"
+              class="text-xs text-green-600 hover:text-green-700 flex items-center"
+            >
+              <Loader2 v-if="loadingIntegratedTags" class="w-3 h-3 mr-1 animate-spin" />
+              <RefreshCw v-else class="w-3 h-3 mr-1" />
+              {{ loadingIntegratedTags ? (currentLanguage === 'zh' ? '生成中...' : 'Generating...') : (currentLanguage === 'zh' ? '生成推荐标签' : 'Generate Tags') }}
+            </button>
+          </div>
+          
+          <!-- Selected Tags -->
+          <div v-if="integratedSelectedTags.length > 0" class="mb-3">
+            <div class="text-xs text-slate-500 mb-2">{{ currentLanguage === 'zh' ? '已选标签:' : 'Selected:' }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span 
+                v-for="tag in integratedSelectedTags" 
+                :key="tag"
+                class="px-2.5 py-1 bg-green-100 text-green-800 text-xs rounded-full flex items-center cursor-pointer hover:bg-green-200"
+                @click="toggleIntegratedTag(tag)"
+              >
+                {{ tag }}
+                <X class="w-3 h-3 ml-1" />
+              </span>
+            </div>
+          </div>
+          
+          <!-- Recommended Tags -->
+          <div v-if="integratedRecommendedTags.length > 0">
+            <div class="text-xs text-slate-500 mb-2">{{ currentLanguage === 'zh' ? '点击选择:' : 'Click to select:' }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span 
+                v-for="tag in integratedRecommendedTags.filter(t => !integratedSelectedTags.includes(t))" 
+                :key="tag"
+                class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs rounded-full cursor-pointer hover:bg-slate-200 transition-colors"
+                @click="toggleIntegratedTag(tag)"
+              >
+                + {{ tag }}
+              </span>
+            </div>
+          </div>
+          
+          <!-- Custom Tag Input -->
+          <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+            <input
+              v-model="integratedCustomTag"
+              type="text"
+              :placeholder="currentLanguage === 'zh' ? '输入自定义标签...' : 'Enter custom tag...'"
+              class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+              @keyup.enter="addIntegratedCustomTag"
+            />
+            <button
+              @click="addIntegratedCustomTag"
+              :disabled="!integratedCustomTag.trim()"
+              class="px-3 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ currentLanguage === 'zh' ? '添加' : 'Add' }}
+            </button>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="p-6 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+          <button
+            @click="showIntegratedTagModal = false"
+            class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors"
+          >
+            {{ currentLanguage === 'zh' ? '取消' : 'Cancel' }}
+          </button>
+          <button
+            @click="confirmSaveIntegratedToKB"
+            :disabled="isSavingIntegratedToKB"
+            class="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            <span v-if="isSavingIntegratedToKB">{{ currentLanguage === 'zh' ? '保存中...' : 'Saving...' }}</span>
+            <span v-else>{{ currentLanguage === 'zh' ? '确认保存' : 'Confirm Save' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Document Detail Modal -->
     <div 
       v-if="documentDetailOpen && selectedDocument" 
@@ -1644,13 +3327,137 @@
       </div>
     </div>
     
+    <!-- Asset Detail Modal -->
+    <div 
+      v-if="assetDetailOpen && selectedAsset" 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="assetDetailOpen = false"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-purple-50 to-indigo-50">
+          <h3 class="text-lg font-semibold text-slate-800 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            {{ currentLanguage === 'zh' ? '资产详情' : 'Asset Details' }}: {{ selectedAsset.asset_id }}
+          </h3>
+          <button 
+            @click="assetDetailOpen = false"
+            class="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X class="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-6 space-y-4">
+          <!-- Asset Type Badge -->
+          <div class="flex items-center gap-3">
+            <span
+              :class="[
+                'text-sm px-3 py-1.5 rounded-full font-medium',
+                selectedAsset.asset_type === 'FIG' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+              ]"
+            >
+              {{ selectedAsset.asset_type === 'FIG' ? (currentLanguage === 'zh' ? '图表' : 'Figure') : (currentLanguage === 'zh' ? '表格' : 'Table') }}
+            </span>
+          </div>
+          
+          <!-- Image Preview (for FIG) -->
+          <div v-if="selectedAsset.image_url && selectedAsset.asset_type === 'FIG'" class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+            <img 
+              :src="getImageUrl(selectedAsset.image_url)" 
+              :alt="selectedAsset.caption_or_title || 'Asset Image'" 
+              class="max-w-full h-auto rounded-lg border border-slate-200 mx-auto"
+              @error="handleImageError"
+            />
+          </div>
+          
+          <!-- Table Content (for TAB) -->
+          <div v-else-if="selectedAsset.asset_type === 'TAB'" class="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+            <div class="bg-slate-100 px-4 py-3 border-b border-slate-200">
+              <h5 class="text-sm font-semibold text-slate-700">{{ currentLanguage === 'zh' ? '表格内容' : 'Table Content' }}</h5>
+            </div>
+            <div class="p-4 max-h-64 overflow-auto">
+              <pre v-if="selectedAsset.raw_text || selectedAsset.table_content" class="text-sm text-slate-600 whitespace-pre-wrap font-mono">{{ selectedAsset.raw_text || selectedAsset.table_content }}</pre>
+              <template v-else-if="selectedAsset.location_anchor">
+                <table v-if="selectedAsset.location_anchor.includes('|')" class="min-w-full text-sm border-collapse">
+                  <tbody>
+                    <tr v-for="(cell, idx) in selectedAsset.location_anchor.split('|').filter((c: string) => c.trim())" :key="idx" class="border-b border-slate-200">
+                      <td class="px-3 py-2 text-slate-600 font-mono">{{ cell.trim() }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <pre v-else class="text-sm text-slate-600 whitespace-pre-wrap font-mono">{{ selectedAsset.location_anchor }}</pre>
+              </template>
+              <p v-else class="text-sm text-slate-500 italic">{{ currentLanguage === 'zh' ? '无表格内容数据' : 'No table content data' }}</p>
+            </div>
+          </div>
+          
+          <!-- Caption/Title -->
+          <div v-if="selectedAsset.caption_or_title" class="bg-white rounded-lg border border-slate-200 p-4">
+            <div class="text-xs font-medium text-slate-500 uppercase mb-2">{{ currentLanguage === 'zh' ? '标题/说明' : 'Caption/Title' }}</div>
+            <p class="text-slate-700 font-medium">{{ selectedAsset.caption_or_title }}</p>
+          </div>
+          
+          <!-- Key Numbers -->
+          <div v-if="filterValidKeyNumbers(selectedAsset.key_numbers).length > 0" class="bg-blue-50 rounded-lg border border-blue-200 p-4">
+            <div class="text-xs font-medium text-blue-600 uppercase mb-2">{{ currentLanguage === 'zh' ? '关键数字' : 'Key Numbers' }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="(num, idx) in filterValidKeyNumbers(selectedAsset.key_numbers)"
+                :key="idx"
+                class="inline-flex items-center px-3 py-1.5 bg-white text-blue-700 rounded-lg text-sm font-mono border border-blue-200"
+              >
+                {{ num }}
+              </span>
+            </div>
+          </div>
+          
+          <!-- Takeaway Claim -->
+          <div v-if="selectedAsset.takeaway_claim" class="bg-amber-50 rounded-lg border border-amber-200 p-4">
+            <div class="text-xs font-medium text-amber-600 uppercase mb-2">{{ currentLanguage === 'zh' ? '要点' : 'Takeaway' }}</div>
+            <p class="text-slate-700 italic">{{ selectedAsset.takeaway_claim }}</p>
+          </div>
+          
+          <!-- Editing Instruction -->
+          <div v-if="selectedAsset.editing_instruction" class="bg-indigo-50 rounded-lg border border-indigo-200 p-4">
+            <div class="text-xs font-medium text-indigo-600 uppercase mb-2">{{ currentLanguage === 'zh' ? '剪辑指示' : 'Editing Instruction' }}</div>
+            <p class="text-slate-700">💡 {{ selectedAsset.editing_instruction }}</p>
+          </div>
+          
+          <!-- Linked Findings -->
+          <div v-if="selectedAsset.linked_findings && selectedAsset.linked_findings.length > 0" class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+            <div class="text-xs font-medium text-slate-500 uppercase mb-2">{{ currentLanguage === 'zh' ? '关联证据' : 'Linked Findings' }}</div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="findingId in selectedAsset.linked_findings"
+                :key="findingId"
+                class="inline-flex items-center px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs"
+              >
+                #{{ findingId }}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+          <button 
+            @click="assetDetailOpen = false"
+            class="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium"
+          >
+            {{ currentLanguage === 'zh' ? '关闭' : 'Close' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    
     <!-- LLM Settings Modal -->
     <div 
       v-if="llmSettingsOpen" 
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       @click.self="llmSettingsOpen = false"
     >
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
         <div class="p-6 border-b border-slate-200 flex items-center justify-between">
           <h3 class="text-lg font-semibold text-slate-800 flex items-center">
             <Settings class="w-5 h-5 mr-2 text-indigo-600" />
@@ -1666,9 +3473,33 @@
           </button>
         </div>
         
-        <div class="p-6 space-y-6">
-          <!-- Provider Display -->
-          <div>
+        <div class="p-6 space-y-6 overflow-y-auto flex-1">
+          <!-- Provider Selection - Only for superadmin -->
+          <div v-if="userRole === 'superadmin'">
+            <label class="block text-sm font-semibold text-slate-700 mb-2">
+              LLM 提供商 *
+            </label>
+            <div class="relative">
+              <select 
+                v-model="selectedProvider"
+                class="w-full px-4 py-2.5 pr-10 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm appearance-none cursor-pointer transition-all"
+              >
+                <option value="openai">OpenAI Compatible (CBIT / OpenAI / Azure)</option>
+                <option value="ollama">Ollama (本地部署)</option>
+              </select>
+              <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </div>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">
+              选择 LLM 服务提供商类型
+            </p>
+          </div>
+          
+          <!-- Provider Display - For regular users -->
+          <div v-else>
             <label class="block text-sm font-semibold text-slate-700 mb-2">
               LLM 提供商
             </label>
@@ -1685,17 +3516,34 @@
             </div>
           </div>
 
+          <!-- API Key Input - Only for superadmin and openai provider -->
+          <div v-if="userRole === 'superadmin' && selectedProvider === 'openai'">
+            <label class="block text-sm font-semibold text-slate-700 mb-2">
+              API Key *
+            </label>
+            <input 
+              v-model="selectedApiKey"
+              type="password"
+              placeholder="输入您的 API Key（如 sk-...）"
+              class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all"
+            />
+            <p class="mt-1 text-xs text-slate-500">
+              您的 API Key 将被安全加密存储
+            </p>
+          </div>
+
           <!-- Model Selection - Only for superadmin -->
           <div v-if="userRole === 'superadmin'">
             <label class="block text-sm font-semibold text-slate-700 mb-2">
               选择模型
             </label>
-            <div class="relative">
+            <div class="relative model-select-wrapper">
               <select 
                 v-model="selectedModel"
                 @focus="fetchAvailableModels"
-                class="w-full px-4 py-2.5 pr-10 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm appearance-none cursor-pointer transition-all"
+                class="model-select w-full px-4 py-2.5 pr-10 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm appearance-none cursor-pointer transition-all"
                 :disabled="llmConfigLoading"
+                size="1"
               >
                 <option value="" disabled>{{ llmConfigLoading ? '加载中...' : '选择一个模型' }}</option>
                 <option 
@@ -1714,7 +3562,25 @@
             </div>
             <p class="mt-2 text-xs text-slate-500">
               当前模型: <span class="font-medium text-slate-700">{{ llmConfig.model || 'N/A' }}</span>
+              <span class="ml-2 text-indigo-600">（共 {{ availableModels.length }} 个可用模型）</span>
             </p>
+            
+            <!-- Custom Model Input -->
+            <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <label class="block text-xs font-medium text-amber-900 mb-2">
+                或手动输入模型名称
+              </label>
+              <input 
+                v-model="customModelName"
+                type="text"
+                placeholder="例如: gpt-4o, cbit-elite-4.2"
+                class="w-full px-3 py-2 text-sm bg-white border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                @input="selectedModel = customModelName"
+              />
+              <p class="mt-1 text-xs text-amber-700">
+                💡 如果列表中没有您需要的模型，可以手动输入模型名称
+              </p>
+            </div>
           </div>
 
           <!-- User info message - for regular users -->
@@ -1754,7 +3620,7 @@
           <button 
             v-if="userRole === 'superadmin'"
             @click="saveLLMConfig"
-            :disabled="llmConfigLoading || !selectedModel"
+            :disabled="llmConfigLoading || !selectedModel || (selectedProvider === 'openai' && !selectedApiKey && !llmConfig.api_key_set)"
             class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {{ llmConfigLoading ? '保存中...' : '保存配置' }}
@@ -1763,9 +3629,86 @@
       </div>
     </div>
     
+    <!-- Integrated Voiceover History Modal -->
+    <div 
+      v-if="showIntegratedHistory" 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="showIntegratedHistory = false"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-slate-800 flex items-center">
+            <Clock class="w-5 h-5 mr-2 text-blue-600" />
+            {{ t('historyTitle') }}
+          </h3>
+          <button 
+            @click="showIntegratedHistory = false"
+            class="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X class="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div class="p-6 overflow-y-auto flex-1">
+          <div v-if="loadingHistory" class="text-center py-12">
+            <Loader2 class="w-8 h-8 animate-spin mx-auto text-blue-600" />
+            <p class="mt-4 text-slate-500">加载中...</p>
+          </div>
+          
+          <div v-else-if="integratedHistoryList.length === 0" class="text-center py-12">
+            <AlertCircle class="w-12 h-12 mx-auto text-slate-300" />
+            <p class="mt-4 text-slate-500">暂无历史记录</p>
+          </div>
+          
+          <div v-else class="space-y-3">
+            <div 
+              v-for="task in integratedHistoryList" 
+              :key="task.task_id"
+              class="bg-white border border-slate-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all"
+            >
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h4 class="font-medium text-slate-800 mb-1">{{ task.topic_hint }}</h4>
+                  <div class="flex items-center gap-4 text-sm text-slate-500">
+                    <span>{{ task.files_count }} {{ t('documents') }}</span>
+                    <span>{{ new Date(task.created_at).toLocaleString() }}</span>
+                    <span 
+                      :class="{
+                        'text-green-600': task.status === 'completed',
+                        'text-blue-600': task.status === 'processing',
+                        'text-red-600': task.status === 'failed'
+                      }"
+                      class="font-medium"
+                    >
+                      {{ task.status === 'completed' ? '已完成' : task.status === 'processing' ? '处理中' : '失败' }}
+                    </span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    v-if="task.status === 'completed'"
+                    @click="loadIntegratedTask(task.task_id)"
+                    class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm"
+                  >
+                    查看
+                  </button>
+                  <button
+                    @click="deleteIntegratedTask(task.task_id)"
+                    class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm"
+                  >
+                    {{ t('deleteTask') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <!-- Save to Knowledge Base Dialog -->
     <div v-if="showSaveToKBDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm" style="animation: fadeIn 0.2s ease-out;">
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6" style="animation: scaleIn 0.3s ease-out;">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-6 flex flex-col max-h-[90vh]" style="animation: scaleIn 0.3s ease-out;">
         <div class="flex items-start mb-4">
           <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mr-4 flex-shrink-0">
             <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1778,13 +3721,87 @@
           </div>
         </div>
         
-        <div class="flex gap-3 mt-6">
+        <!-- Tag Selection Section -->
+        <div class="flex-1 overflow-y-auto mb-6 pr-2">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-2 flex items-center">
+              <Tag class="w-4 h-4 mr-1.5 text-indigo-500" />
+              {{ currentLanguage === 'zh' ? '标签 (Tags)' : 'Tags' }}
+            </label>
+            
+            <!-- Recommended Tags -->
+            <div v-if="recommendedTags.length > 0" class="mb-3">
+              <div class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider flex items-center">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5"></span>
+                {{ currentLanguage === 'zh' ? '智能推荐' : 'Recommended' }}
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="tag in recommendedTags"
+                  :key="tag"
+                  @click="toggleTag(tag)"
+                  :class="[
+                    'px-3 py-1.5 rounded-full text-xs font-medium transition-all border',
+                    selectedTags.has(tag)
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                  ]"
+                >
+                  {{ tag }}
+                  <span v-if="selectedTags.has(tag)" class="ml-1">✓</span>
+                </button>
+              </div>
+            </div>
+            
+            <!-- Custom Tag Input -->
+            <div class="flex gap-2 mb-4">
+              <input 
+                v-model="customTagInput"
+                @keyup.enter="addCustomTag"
+                type="text" 
+                :placeholder="currentLanguage === 'zh' ? '添加自定义标签...' : 'Add custom tag...'"
+                class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <button 
+                @click="addCustomTag"
+                :disabled="!customTagInput.trim()"
+                class="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 disabled:opacity-50 text-sm font-medium"
+              >
+                +
+              </button>
+            </div>
+            
+            <!-- All Available Tags -->
+            <div>
+              <div class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                {{ currentLanguage === 'zh' ? '所有标签' : 'All Tags' }}
+              </div>
+              <div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
+                <button
+                  v-for="tag in availableTags.filter(t => !recommendedTags.includes(t))"
+                  :key="tag"
+                  @click="toggleTag(tag)"
+                  :class="[
+                    'px-2.5 py-1 rounded-full text-xs transition-colors border',
+                    selectedTags.has(tag)
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  ]"
+                >
+                  {{ tag }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3 mt-auto pt-4 border-t border-slate-100">
           <button 
             @click="skipKBSave"
             :disabled="isSavingToKB"
             class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {{ t('skipSave') }}
+            {{ t('cancel') }}
           </button>
           <button 
             @click="saveToKnowledgeBase"
@@ -1800,11 +3817,429 @@
         </div>
       </div>
     </div>
+
+    <!-- Upload Article Dialog -->
+    <div v-if="showUploadArticleDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm" style="animation: fadeIn 0.2s ease-out;">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 p-6 flex flex-col max-h-[90vh]" style="animation: scaleIn 0.3s ease-out;">
+        <div class="flex items-start mb-4">
+          <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mr-4 flex-shrink-0">
+            <Upload class="w-6 h-6 text-indigo-600" />
+          </div>
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold text-slate-800 mb-1">
+              {{ currentLanguage === 'zh' ? '上传文章到知识库' : 'Upload Article to Knowledge Base' }}
+            </h3>
+            <p class="text-sm text-slate-500">
+              {{ currentLanguage === 'zh' ? '上传文档并选择相关标签' : 'Upload document and select relevant tags' }}
+            </p>
+          </div>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto mb-6 pr-2">
+          <!-- File Upload Area -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-2">
+              {{ currentLanguage === 'zh' ? '文档文件' : 'Document File' }}
+            </label>
+            <div 
+              @drop.prevent="handleUploadFileDrop"
+              @dragover.prevent="isUploadDragging = true"
+              @dragleave.prevent="isUploadDragging = false"
+              :class="[
+                'border-2 border-dashed rounded-xl p-8 text-center transition-colors',
+                isUploadDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
+              ]"
+            >
+              <input 
+                ref="uploadFileInput"
+                type="file" 
+                @change="handleUploadFileSelect"
+                accept=".pdf,.doc,.docx,.txt"
+                class="hidden"
+              />
+              <div v-if="!uploadArticleFile">
+                <Upload class="w-10 h-10 mx-auto mb-3 text-slate-400" />
+                <p class="text-sm text-slate-600 mb-1">
+                  {{ currentLanguage === 'zh' ? '拖放文件到此处或' : 'Drop file here or' }}
+                  <button 
+                    @click="$refs.uploadFileInput.click()"
+                    class="text-indigo-600 hover:text-indigo-700 font-medium"
+                  >
+                    {{ currentLanguage === 'zh' ? '浏览' : 'browse' }}
+                  </button>
+                </p>
+                <p class="text-xs text-slate-400">PDF, DOC, DOCX, TXT</p>
+              </div>
+              <div v-else class="flex items-center justify-between bg-slate-50 rounded-lg p-3">
+                <div class="flex items-center">
+                  <FileText class="w-5 h-5 text-indigo-600 mr-2" />
+                  <span class="text-sm text-slate-700">{{ uploadArticleFile.name }}</span>
+                </div>
+                <button 
+                  @click="uploadArticleFile = null"
+                  class="text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  <X class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tag Selection -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-2 flex items-center">
+              <Tag class="w-4 h-4 mr-1.5 text-indigo-500" />
+              {{ currentLanguage === 'zh' ? '选择标签' : 'Select Tags' }}
+            </label>
+            
+            <!-- AI Recommended Tags -->
+            <div v-if="recommendedTags.length > 0" class="mb-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+              <div class="flex items-center mb-2">
+                <Zap class="w-4 h-4 text-green-600 mr-1.5" />
+                <span class="text-xs font-semibold text-green-700 uppercase tracking-wider">
+                  {{ currentLanguage === 'zh' ? 'AI 智能推荐' : 'AI Recommended' }}
+                </span>
+              </div>
+              <p class="text-xs text-slate-600 mb-2">
+                {{ currentLanguage === 'zh' ? '点击下方标签即可选择，您可以自由选择或忽略这些建议' : 'Click tags below to select. You can choose or ignore these suggestions freely' }}
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="tag in recommendedTags"
+                  :key="tag"
+                  @click="toggleTag(tag)"
+                  :class="[
+                    'px-3 py-1.5 rounded-full text-xs font-medium transition-all border-2',
+                    selectedTags.has(tag)
+                      ? 'bg-green-600 text-white border-green-600 shadow-md scale-105'
+                      : 'bg-white text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400'
+                  ]"
+                >
+                  {{ tag }}
+                  <span v-if="selectedTags.has(tag)" class="ml-1">✓</span>
+                </button>
+              </div>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div v-if="tagsLoading" class="mb-4 flex items-center justify-center p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <Loader2 class="w-5 h-5 text-indigo-500 animate-spin mr-2" />
+              <span class="text-sm text-slate-600">
+                {{ currentLanguage === 'zh' ? '正在分析文档并推荐标签...' : 'Analyzing document and recommending tags...' }}
+              </span>
+            </div>
+            
+            <!-- Custom Tag Input -->
+            <div class="flex gap-2 mb-3">
+              <input 
+                v-model="customTagInput"
+                @keyup.enter="addCustomTag"
+                type="text" 
+                :placeholder="currentLanguage === 'zh' ? '添加自定义标签...' : 'Add custom tag...'"
+                class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <button 
+                @click="addCustomTag"
+                :disabled="!customTagInput.trim()"
+                class="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 disabled:opacity-50 text-sm font-medium"
+              >
+                +
+              </button>
+            </div>
+            
+            <!-- All Available Tags -->
+            <div>
+              <div class="text-xs font-medium text-slate-500 mb-2">
+                {{ currentLanguage === 'zh' ? '所有标签' : 'All Tags' }}
+              </div>
+              <div class="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 border border-slate-200 rounded-lg bg-slate-50">
+                <button
+                  v-for="tag in availableTags.filter(t => !recommendedTags.includes(t))"
+                  :key="tag"
+                  @click="toggleTag(tag)"
+                  :class="[
+                    'px-3 py-1.5 rounded-full text-xs transition-colors border',
+                    selectedTags.has(tag)
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-white'
+                  ]"
+                >
+                  {{ tag }}
+                  <span v-if="selectedTags.has(tag)" class="ml-1">✓</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3 mt-auto pt-4 border-t border-slate-100">
+          <button 
+            @click="cancelUploadArticle"
+            :disabled="isUploadingArticle"
+            class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {{ t('cancel') }}
+          </button>
+          <button 
+            @click="uploadArticleToKB"
+            :disabled="!uploadArticleFile || isUploadingArticle"
+            class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center disabled:opacity-50"
+          >
+            <Loader2 v-if="isUploadingArticle" class="w-4 h-4 mr-2 animate-spin" />
+            <Upload v-else class="w-4 h-4 mr-2" />
+            {{ isUploadingArticle ? (currentLanguage === 'zh' ? '上传中...' : 'Uploading...') : (currentLanguage === 'zh' ? '上传' : 'Upload') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tag Management Dialog -->
+    <div v-if="showTagManagementDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm" style="animation: fadeIn 0.2s ease-out;">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-6 flex flex-col max-h-[90vh]" style="animation: scaleIn 0.3s ease-out;">
+        <div class="flex items-start mb-4">
+          <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mr-4 flex-shrink-0">
+            <Tag class="w-6 h-6 text-indigo-600" />
+          </div>
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold text-slate-800 mb-1">
+              {{ currentLanguage === 'zh' ? '标签管理' : 'Tag Management' }}
+            </h3>
+            <p class="text-sm text-slate-500">
+              {{ currentLanguage === 'zh' ? '管理知识库的所有标签' : 'Manage all knowledge base tags' }}
+            </p>
+          </div>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto mb-6 pr-2">
+          <!-- Add New Tag -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-2">
+              {{ currentLanguage === 'zh' ? '添加新标签' : 'Add New Tag' }}
+            </label>
+            <div class="flex gap-2">
+              <input 
+                v-model="newTagInput"
+                @keyup.enter="addNewTag"
+                type="text" 
+                :placeholder="currentLanguage === 'zh' ? '输入标签名称...' : 'Enter tag name...'"
+                class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+              <button 
+                @click="addNewTag"
+                :disabled="!newTagInput.trim() || tagsLoading"
+                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {{ currentLanguage === 'zh' ? '添加' : 'Add' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Tags List -->
+          <div>
+            <div class="text-sm font-medium text-slate-700 mb-3">
+              {{ currentLanguage === 'zh' ? '所有标签' : 'All Tags' }} ({{ availableTags.length }})
+            </div>
+            <div v-if="tagsLoading" class="flex items-center justify-center py-8">
+              <Loader2 class="w-6 h-6 text-indigo-500 animate-spin" />
+            </div>
+            <div v-else class="space-y-2 max-h-64 overflow-y-auto">
+              <div 
+                v-for="tag in availableTags" 
+                :key="tag"
+                class="flex items-center justify-between p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group"
+              >
+                <span class="text-sm text-slate-700">{{ tag }}</span>
+                <button 
+                  @click="deleteTag(tag)"
+                  class="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                  :title="currentLanguage === 'zh' ? '删除标签' : 'Delete tag'"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3 mt-auto pt-4 border-t border-slate-100">
+          <button 
+            @click="showTagManagementDialog = false"
+            class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {{ currentLanguage === 'zh' ? '完成' : 'Done' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Template Modal -->
+    <div v-if="showEmailTemplateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm" style="animation: fadeIn 0.2s ease-out;">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-4 p-6 flex flex-col max-h-[90vh]" style="animation: scaleIn 0.3s ease-out;">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold text-slate-800 mb-1">{{ editingEmailTemplate ? (currentLanguage === 'zh' ? '编辑模板' : 'Edit Template') : (currentLanguage === 'zh' ? '新建模板' : 'New Template') }}</h3>
+          </div>
+          <button 
+            @click="closeEmailTemplateModal"
+            class="text-slate-400 hover:text-slate-600"
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto mb-6">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">{{ currentLanguage === 'zh' ? '模板名称' : 'Template Name' }}</label>
+              <input type="text" v-model="emailTemplateForm.name" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">{{ currentLanguage === 'zh' ? '邮件主题' : 'Email Subject' }}</label>
+              <input type="text" v-model="emailTemplateForm.subject" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-medium text-slate-700">{{ currentLanguage === 'zh' ? '邮件内容' : 'Email Content' }}</label>
+                <div class="flex gap-2">
+                  <button 
+                    @click="switchEmailTemplateViewMode('visual')"
+                    :class="[
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      emailTemplateViewMode === 'visual' 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ]"
+                  >
+                    <svg class="w-3 h-3 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    {{ currentLanguage === 'zh' ? '可视化' : 'Visual' }}
+                  </button>
+                  <button 
+                    @click="switchEmailTemplateViewMode('code')"
+                    :class="[
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      emailTemplateViewMode === 'code' 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ]"
+                  >
+                    <FileText class="w-3 h-3 inline-block mr-1" />
+                    {{ currentLanguage === 'zh' ? '代码' : 'Code' }}
+                  </button>
+                  <button 
+                    @click="switchEmailTemplateViewMode('preview')"
+                    :class="[
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      emailTemplateViewMode === 'preview' 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ]"
+                  >
+                    <svg class="w-3 h-3 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    {{ currentLanguage === 'zh' ? '预览' : 'Preview' }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Visual Editor -->
+              <div v-show="emailTemplateViewMode === 'visual'">
+                <div id="quill-editor" class="border border-slate-300 rounded-lg" style="min-height: 400px;"></div>
+                <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p class="text-xs text-blue-800 font-medium mb-1">
+                    💡 {{ currentLanguage === 'zh' ? '可视化编辑模式' : 'Visual Editing Mode' }}
+                  </p>
+                  <ul class="text-xs text-blue-700 space-y-1 ml-4">
+                    <li>{{ currentLanguage === 'zh' ? '✓ 使用工具栏格式化文本、添加颜色、插入链接和图片' : '✓ Use toolbar to format text, add colors, insert links and images' }}</li>
+                    <li>{{ currentLanguage === 'zh' ? '✓ 直接粘贴带格式的内容（从 Word、网页等）' : '✓ Paste formatted content directly (from Word, web pages, etc.)' }}</li>
+                    <li>{{ currentLanguage === 'zh' ? '✓ 所见即所得，编辑后立即看到效果' : '✓ WYSIWYG - see the result immediately as you edit' }}</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <!-- Code Editor -->
+              <div v-show="emailTemplateViewMode === 'code'">
+                <textarea 
+                  v-model="emailTemplateForm.content" 
+                  rows="15" 
+                  class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono"
+                  placeholder="<html><body>...</body></html>"
+                ></textarea>
+                <div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                  <p class="text-xs text-slate-700 font-medium mb-1">
+                    💡 {{ currentLanguage === 'zh' ? '代码编辑模式（高级）' : 'Code Editing Mode (Advanced)' }}
+                  </p>
+                  <ul class="text-xs text-slate-600 space-y-1 ml-4">
+                    <li>{{ currentLanguage === 'zh' ? '✓ 直接编辑 HTML 源代码' : '✓ Edit HTML source code directly' }}</li>
+                    <li v-if="currentLanguage === 'zh'">✓ 使用 &#123;&#123;变量名&#125;&#125; 定义可替换的内容</li>
+                    <li v-else>✓ Use &#123;&#123;variable_name&#125;&#125; for replaceable content</li>
+                    <li>{{ currentLanguage === 'zh' ? '✓ 适合有 HTML/CSS 经验的高级用户' : '✓ For advanced users with HTML/CSS experience' }}</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <!-- Preview -->
+              <div v-show="emailTemplateViewMode === 'preview'" class="border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
+                <div class="bg-gradient-to-r from-slate-700 to-slate-600 text-white px-4 py-3 text-xs font-medium flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>{{ currentLanguage === 'zh' ? '邮件预览' : 'Email Preview' }}</span>
+                  </div>
+                  <span class="text-slate-300">{{ emailTemplateForm.subject || (currentLanguage === 'zh' ? '（未设置主题）' : '(No subject)') }}</span>
+                </div>
+                <div class="p-4 bg-white">
+                  <iframe 
+                    ref="previewIframe"
+                    class="w-full border-0"
+                    style="min-height: 500px; max-height: 500px;"
+                    sandbox="allow-same-origin"
+                  ></iframe>
+                </div>
+                <div class="mt-2 px-4 pb-3">
+                  <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p class="text-xs text-amber-800 font-medium mb-1">
+                      💡 {{ currentLanguage === 'zh' ? '预览模式（只读）' : 'Preview Mode (Read-only)' }}
+                    </p>
+                    <ul class="text-xs text-amber-700 space-y-1 ml-4">
+                      <li>{{ currentLanguage === 'zh' ? '✓ 查看邮件在客户端中的最终效果' : '✓ See how the email will look in email clients' }}</li>
+                      <li v-if="currentLanguage === 'zh'">✓ 变量（如 &#123;&#123;name&#125;&#125;）会原样显示</li>
+                      <li v-else>✓ Variables like &#123;&#123;name&#125;&#125; will be shown as-is</li>
+                      <li>{{ currentLanguage === 'zh' ? '✓ 需要编辑请切换到"可视化"或"代码"模式' : '✓ Switch to Visual or Code mode to edit' }}</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3 mt-auto pt-4 border-t border-slate-100">
+          <button 
+            @click="closeEmailTemplateModal"
+            class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
+          >
+            {{ currentLanguage === 'zh' ? '取消' : 'Cancel' }}
+          </button>
+          <button 
+            @click="saveEmailTemplate"
+            class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            {{ currentLanguage === 'zh' ? '保存' : 'Save' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { 
   FileText, 
@@ -1823,7 +4258,19 @@ import {
   Database,
   Languages,
   RefreshCw,
-  FileVideo
+  FileVideo,
+  Image,
+  Clock,
+  X,
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  TrendingUp,
+  Newspaper,
+  Zap,
+  Save,
+  Tag,
+  Mail
 } from 'lucide-vue-next';
 
 // Configuration
@@ -1860,6 +4307,11 @@ const previewLoading = ref<string | null>(null);
 const previewAudioUrl = ref<Record<string, string>>({});
 const userDisplayName = ref('Workspace');
 const userInitials = ref('AI');
+// 文本转语音状态
+const ttsInputText = ref('');
+const ttsSelectedVoiceId = ref('');
+const generatingTTSAudio = ref(false);
+const ttsGeneratedAudioUrl = ref('');
 const userRole = ref(localStorage.getItem('vox_role') || 'user');
 
 // Language State (Default: English)
@@ -1882,11 +4334,21 @@ const currentStep = ref('');
 const academicResult = ref<any>(null);
 const academicResultTab = ref('summary');
 const isDraggingAcademic = ref(false);
+const isSavingAcademicToKB = ref(false);
+// Academic Extract 推荐标签
+const academicRecommendedTags = ref<string[]>([]);
+const academicSelectedTags = ref<string[]>([]);
+const academicCustomTag = ref('');
+const loadingAcademicTags = ref(false);
 const academicHistory = ref<any[]>([]);
 const academicHistorySearch = ref('');
 const academicHistoryPage = ref(1);
 const academicHistoryPageSize = ref(10);
 const academicHistoryTotal = ref(0);
+// Academic Extract 编辑模式状态
+const isEditingAcademicSummary = ref(false);
+const editedAcademicSummaryZh = ref('');
+const editedAcademicSummaryEn = ref('');
 
 // TTS State for Academic Extract
 const selectedVoiceId = ref('');
@@ -1894,10 +4356,33 @@ const selectedSummaryLang = ref('zh');
 const audioUrl = ref('');
 const isGeneratingAudio = ref(false);
 
+// TTS State for Integrated Voiceover
+const selectedIntegratedVoiceId = ref('');
+const integratedAudioUrl = ref('');
+const isGeneratingIntegratedAudio = ref(false);
+
 // Knowledge Base Save State
 const showSaveToKBDialog = ref(false);
 const pendingKBSave = ref<any>(null);
 const isSavingToKB = ref(false);
+
+// Tag Management State
+const availableTags = ref<string[]>([]);
+const selectedTags = ref<Set<string>>(new Set());
+const recommendedTags = ref<string[]>([]);
+const customTagInput = ref('');
+const tagsLoading = ref(false);
+const selectedTagFilter = ref('');
+const newTagInput = ref('');
+
+// Upload Article State
+const showUploadArticleDialog = ref(false);
+const uploadArticleFile = ref<File | null>(null);
+const isUploadDragging = ref(false);
+const isUploadingArticle = ref(false);
+
+// Tag Management Dialog State
+const showTagManagementDialog = ref(false);
 
 // Integrated Voiceover State
 const integratedForm = ref({
@@ -1906,7 +4391,8 @@ const integratedForm = ref({
   speaker_name: '',
   include_vox_intro: true,
   style_preference: '',
-  language: 'zh'
+  language: 'zh',
+  word_limit: null as number | null  // 字数限制: 2000/3000/4000 或 null(不限制)
 });
 const integratedFiles = ref<File[]>([]);
 const isDraggingIntegrated = ref(false);
@@ -1916,11 +4402,63 @@ const integratedStatus = ref<any>(null);
 const integratedResult = ref<any>(null);
 const integratedError = ref('');
 const integratedResultTab = ref('style');
+const integratedParsedDocs = ref<any[]>([]);
+const isSavingIntegratedToKB = ref(false);
+// Integrated Voiceover 标签管理
+const showIntegratedTagModal = ref(false);
+const integratedRecommendedTags = ref<string[]>([]);
+const integratedSelectedTags = ref<string[]>([]);
+const integratedCustomTag = ref('');
+const loadingIntegratedTags = ref(false);
 let integratedPollingInterval: number | null = null;
+// 编辑模式状态
+const isEditingIntegratedFinal = ref(false);
+const editedIntegratedFinal = ref('');
 
 // Document Detail State
 const documentDetailOpen = ref(false);
 const selectedDocument = ref<any>(null);
+
+// Asset Detail State
+const assetDetailOpen = ref(false);
+const selectedAsset = ref<any>(null);
+
+// Email Marketing State
+const currentEmailTab = ref('subscribers');
+const emailTabs = [
+  { id: 'subscribers', name: currentLanguage.value === 'zh' ? '订阅用户' : 'Subscribers' },
+  { id: 'templates', name: currentLanguage.value === 'zh' ? '邮件模板' : 'Templates' },
+  { id: 'send', name: currentLanguage.value === 'zh' ? '发送邮件' : 'Send Email' },
+  { id: 'settings', name: currentLanguage.value === 'zh' ? '配置设置' : 'Settings' }
+];
+const emailSubscribers = ref<any[]>([]);
+const emailTemplates = ref<any[]>([]);
+const emailLoading = ref(false);
+const emailSending = ref(false);
+const emailSendForm = ref({
+  template_id: '',
+  type: 'all',
+  test_email: ''
+});
+const emailConfigForm = ref({
+  smtp_server: '',
+  smtp_port: 587,
+  smtp_username: '',
+  smtp_password: '',
+  sender_email: '',
+  sender_name: '',
+  use_tls: true
+});
+const showEmailTemplateModal = ref(false);
+const editingEmailTemplate = ref<any>(null);
+const emailTemplateForm = ref({
+  name: '',
+  subject: '',
+  content: ''
+});
+const emailTemplateViewMode = ref<'visual' | 'code' | 'preview'>('visual');
+let quillEditor: any = null;
+const previewIframe = ref<HTMLIFrameElement | null>(null);
 
 // LLM Settings State
 const llmSettingsOpen = ref(false);
@@ -1931,9 +4469,55 @@ const llmConfig = ref({
   api_key_set: false
 });
 const availableModels = ref<Array<{id: string, name: string, provider: string}>>([]);
+const selectedProvider = ref('openai');
 const selectedModel = ref('');
+
+// Integrated Voiceover History State
+const integratedHistoryList = ref<any[]>([]);
+const showIntegratedHistory = ref(false);
+const loadingHistory = ref(false);
+
+// Image Management State
+const imageList = ref<any[]>([]);
+const loadingImages = ref(false);
+const selectedImages = ref<Set<string>>(new Set());
+const selectedApiKey = ref('');
+const customModelName = ref('');
 const llmConfigLoading = ref(false);
 const llmConfigError = ref('');
+
+// AI Search State
+const searchQuery = ref('');
+const searchType = ref('knowledge');
+const searchLanguage = ref('zh');
+const searchLimit = ref(10);
+const isSearching = ref(false);
+const searchResults = ref<any>(null);
+const searchResultsList = ref<any[]>([]);
+const aiAnswer = ref('');
+const searchDuration = ref(0);
+const searchHistory = ref<string[]>([]);
+
+// Hot News State
+const hotNewsTopic = ref('');
+const hotNewsStyle = ref('professional');
+const hotNewsLength = ref('medium');
+const hotNewsGenerateScript = ref(false);
+const hotNewsGenerating = ref(false);
+const hotNewsResult = ref<any>(null);
+const trendingTopics = ref<any[]>([]);
+const latestNews = ref<any[]>([]);
+const loadingTrending = ref(false);
+const loadingNews = ref(false);
+const selectedNewsDetail = ref<any>(null);
+const showNewsDetail = ref(false);
+const savingNewsToKB = ref(false);
+const loadingNewsContent = ref(false);
+// 新闻源选择
+const availableNewsSources = ref<any[]>([]);
+const selectedNewsSources = ref<string[]>([]);
+const loadingNewsSources = ref(false);
+const showNewsSourceSelector = ref(false);
 
 // i18n Translations
 const translations = {
@@ -1945,11 +4529,24 @@ const translations = {
     aiSearch: 'AI Search',
     hotTopics: 'Hot Topics',
     integratedVoiceover: 'Integrated Voiceover',
+    imageManagement: 'Image Management',
+    emailMarketing: 'Email Marketing',
     
     // Common
     settings: 'LLM Settings',
     export: 'Export',
     logOut: 'Log Out',
+    historyTitle: 'History',
+    viewHistory: 'View History',
+    deleteTask: 'Delete',
+    confirmDelete: 'Are you sure you want to delete this task?',
+    imageCount: 'images',
+    deleteImage: 'Delete',
+    deleteSelected: 'Delete Selected',
+    selectAll: 'Select All',
+    clearAll: 'Clear All',
+    cleanupOld: 'Cleanup Old Images',
+    daysOld: 'days old',
     back: 'Back to Main',
     
         
@@ -2035,7 +4632,8 @@ const translations = {
     reviewVersion: 'Review Version',
     finalVersion: 'Final Version',
     copy: 'Copy',
-    generating: 'Generating voiceover script...',
+    download: 'Download',
+    generatingVoiceover: 'Generating voiceover script...',
     currentStep: 'Current Step',
     generationFailed: 'Generation failed',
     noResult: 'No result yet',
@@ -2066,7 +4664,13 @@ const translations = {
     relatedDocs: 'Related Documents',
     relatedAssets: 'Related Assets',
     sectionGoal: 'Section Goal',
-    untitled: 'Untitled Section'
+    untitled: 'Untitled Section',
+    troubleshootingTips: 'Troubleshooting Tips',
+    tip1: 'The LLM service may be overloaded. Please wait a moment and try again.',
+    tip2: 'Reduce the number of uploaded documents (try 2-3 documents).',
+    tip3: 'Simplify your topic description.',
+    retryGeneration: 'Retry Generation',
+    backToForm: 'Back to Form'
   },
   zh: {
     // Navigation
@@ -2076,11 +4680,24 @@ const translations = {
     aiSearch: 'AI 搜索',
     hotTopics: '热点话题',
     integratedVoiceover: '整合口播',
+    imageManagement: '图片管理',
+    emailMarketing: '邮件营销',
     
     // Common
     settings: 'LLM 设置',
     export: '导出',
     logOut: '退出登录',
+    historyTitle: '历史记录',
+    viewHistory: '查看历史',
+    deleteTask: '删除',
+    confirmDelete: '确定要删除这条任务吗？',
+    imageCount: '张图片',
+    deleteImage: '删除',
+    deleteSelected: '删除选中',
+    selectAll: '全选',
+    clearAll: '清空',
+    cleanupOld: '清理旧图片',
+    daysOld: '天前',
     back: '返回主页',
     
         
@@ -2166,7 +4783,8 @@ const translations = {
     reviewVersion: '审阅版',
     finalVersion: '上屏版',
     copy: '复制',
-    generating: '正在生成口播稿...',
+    download: '下载',
+    generatingVoiceover: '正在生成口播稿...',
     currentStep: '当前步骤',
     generationFailed: '生成失败',
     noResult: '暂无结果',
@@ -2197,7 +4815,13 @@ const translations = {
     relatedDocs: '相关文档',
     relatedAssets: '相关资产',
     sectionGoal: '章节目标',
-    untitled: '无标题章节'
+    untitled: '无标题章节',
+    troubleshootingTips: '解决建议',
+    tip1: 'LLM服务可能负载较高，请稍等片刻后重试',
+    tip2: '减少上传文档数量（建议2-3篇文档）',
+    tip3: '简化主题描述，使用更简洁的表达',
+    retryGeneration: '重新生成',
+    backToForm: '返回表单'
   }
 };
 
@@ -2231,17 +4855,25 @@ const getStructureName = (structureCode: string): string => {
 
 // Helper function to get full image URL
 const getImageUrl = (imageUrl: string): string => {
-  if (!imageUrl) return '';
+  console.log('[getImageUrl] Input:', imageUrl);
+  if (!imageUrl) {
+    console.warn('[getImageUrl] Empty imageUrl');
+    return '';
+  }
   // If URL already starts with http, return as is
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    console.log('[getImageUrl] Absolute URL:', imageUrl);
     return imageUrl;
   }
   // If API_BASE_URL is empty (using proxy), return relative URL
   if (!API_BASE_URL) {
+    console.log('[getImageUrl] Using relative URL:', imageUrl);
     return imageUrl;
   }
   // Otherwise, prepend API_BASE_URL
-  return `${API_BASE_URL}${imageUrl}`;
+  const fullUrl = `${API_BASE_URL}${imageUrl}`;
+  console.log('[getImageUrl] Full URL:', fullUrl);
+  return fullUrl;
 };
 
 // Helper function to handle image load errors
@@ -2264,11 +4896,95 @@ const formatScriptText = (text: string): string => {
   // Convert ### sub-headings
   formatted = formatted.replace(/^### (.+)$/gm, '<div class="script-heading-sub">$1</div>');
   
-  // Convert evidence markers like 【证据：...】 to styled badges
-  formatted = formatted.replace(/【证据：([^】]+)】/g, '<span class="evidence-badge">📚 证据: $1</span>');
+  // Convert evidence markers to clickable badges（支持全角【】、半角[]、圆括号（）等多种变体）
+  const evidenceBadgeReplacer = (_match: string, content: string) => {
+    return `<span class="evidence-badge clickable-evidence" data-evidence-id="${content.trim()}" title="点击查看证据详情">📚 证据: ${content.trim()}</span>`;
+  };
+  // 全角方括号：【证据：...】 或 【证据:...】
+  formatted = formatted.replace(/【证据[：:]([^】]+)】/g, evidenceBadgeReplacer);
+  // 半角方括号：[证据：...] 或 [证据:...]
+  formatted = formatted.replace(/\[证据[：:]([^\]]+)\]/g, evidenceBadgeReplacer);
+  // 圆括号变体：（证据：...）
+  formatted = formatted.replace(/（证据[：:]([^）]+)）/g, evidenceBadgeReplacer);
   
-  // Convert figure markers like 【图表：...】 to styled badges
-  formatted = formatted.replace(/【图表：([^】]+)】/g, '<span class="figure-badge">📊 图表: $1</span>');
+  // Helper: 从图表标记内容中提取 asset_id
+  const extractAssetId = (content: string): string => {
+    const assetIdMatch = content.match(/(D\d+-(?:FIG|TAB)-\d+)/);
+    return assetIdMatch ? assetIdMatch[1] : content.trim();
+  };
+
+  // For Final Version: Replace figure markers with actual images
+  if (integratedResultTab.value === 'final' && integratedResult.value?.visual_asset_ledger?.assets) {
+    const assets = integratedResult.value.visual_asset_ledger.assets;
+    console.log('[formatScriptText] Final mode, assets count:', assets.length, 'FIG assets:', assets.filter((a: any) => a.asset_type === 'FIG' && a.image_url).length);
+    
+    // Helper: 尝试将图表标记替换为实际图片
+    const figureImageReplacer = (match: string, content: string) => {
+      const assetId = extractAssetId(content);
+      const asset = assets.find((a: any) => a.asset_id === assetId);
+      console.log(`[figureImageReplacer] marker="${match}", assetId="${assetId}", found=${!!asset}, image_url=${asset?.image_url || 'N/A'}, type=${asset?.asset_type || 'N/A'}`);
+      if (asset && asset.image_url && asset.asset_type === 'FIG') {
+        const imgUrl = getImageUrl(asset.image_url);
+        const caption = asset.caption_or_title || assetId;
+        return `<div class="figure-container"><img src="${imgUrl}" alt="${caption}" class="figure-image" onerror="this.alt='图片加载失败: ${assetId}';this.style.border='2px dashed #e53e3e';this.style.padding='20px';this.style.background='#fff5f5';this.src=''" /><p class="figure-caption">${caption}</p></div>`;
+      }
+      return `<span class="figure-badge clickable-asset" data-asset-id="${assetId}" title="点击查看图表详情">📊 图表: ${assetId}</span>`;
+    };
+
+    // Replace various figure marker formats with actual images
+    formatted = formatted.replace(/📊\s*图表[:：]\s*([^\n\r]+)/g, (match, assetId) => {
+      const asset = assets.find((a: any) => a.asset_id === assetId.trim());
+      if (asset && asset.image_url && asset.asset_type === 'FIG') {
+        const imgUrl = getImageUrl(asset.image_url);
+        const caption = asset.caption_or_title || assetId;
+        return `<div class="figure-container"><img src="${imgUrl}" alt="${caption}" class="figure-image" onerror="this.alt='图片加载失败';this.style.border='2px dashed #e53e3e';this.style.padding='20px';this.style.background='#fff5f5';this.src=''" /><p class="figure-caption">${caption}</p></div>`;
+      }
+      return match;
+    });
+    
+    formatted = formatted.replace(/🖼️\s*图[:：]\s*([^\n\r]+)/g, (match, assetId) => {
+      const asset = assets.find((a: any) => a.asset_id === assetId.trim());
+      if (asset && asset.image_url && asset.asset_type === 'FIG') {
+        const imgUrl = getImageUrl(asset.image_url);
+        const caption = asset.caption_or_title || assetId;
+        return `<div class="figure-container"><img src="${imgUrl}" alt="${caption}" class="figure-image" onerror="this.alt='图片加载失败';this.style.border='2px dashed #e53e3e';this.style.padding='20px';this.style.background='#fff5f5';this.src=''" /><p class="figure-caption">${caption}</p></div>`;
+      }
+      return match;
+    });
+    
+    // 全角方括号：【图表：...】
+    formatted = formatted.replace(/【图表[：:]([^】]+)】/g, figureImageReplacer);
+    // 半角方括号：[图表：...] 或 [图表:...]
+    formatted = formatted.replace(/\[图表[：:]([^\]]+)\]/g, figureImageReplacer);
+    // 兜底：〔画面：D1-FIG-1（标题）— 要点〕 格式（figure_style B 可能产生）
+    formatted = formatted.replace(/〔画面[：:]([^〕]+)〕/g, figureImageReplacer);
+    // 兜底：[图：...] 或 【图：...】 简写格式
+    formatted = formatted.replace(/【图[：:]([^】]+)】/g, figureImageReplacer);
+    formatted = formatted.replace(/\[图[：:]([^\]]+)\]/g, figureImageReplacer);
+  } else {
+    console.log('[formatScriptText] Badge mode (not final), tab:', integratedResultTab.value, 'has_assets:', !!integratedResult.value?.visual_asset_ledger?.assets);
+    // For Review Version: Keep as clickable badges
+    const figureBadgeReplacer = (_match: string, content: string) => {
+      const assetId = extractAssetId(content);
+      return `<span class="figure-badge clickable-asset" data-asset-id="${assetId}" title="点击查看图表详情">📊 图表: ${assetId}</span>`;
+    };
+    // 全角方括号
+    formatted = formatted.replace(/【图表[：:]([^】]+)】/g, figureBadgeReplacer);
+    // 半角方括号
+    formatted = formatted.replace(/\[图表[：:]([^\]]+)\]/g, figureBadgeReplacer);
+    // 兜底：〔画面：...〕 格式
+    formatted = formatted.replace(/〔画面[：:]([^〕]+)〕/g, figureBadgeReplacer);
+    // 兜底：[图：...] 或 【图：...】 简写格式
+    formatted = formatted.replace(/【图[：:]([^】]+)】/g, figureBadgeReplacer);
+    formatted = formatted.replace(/\[图[：:]([^\]]+)\]/g, figureBadgeReplacer);
+  }
+  
+  // Also handle D1-FIG-1, D2-TAB-1 style references in text (including after colons)
+  // 注意：不要匹配已经在 HTML 标签内的内容（如 alt="D1-FIG-1" 或 data-asset-id="D1-FIG-1"）
+  // 只匹配纯文本中的引用
+  formatted = formatted.replace(/(?<![="'])(D\d+-(?:FIG|TAB)-\d+)(?![^<]*>)/g, (match, assetId) => {
+    return `<span class="asset-ref clickable-asset" data-asset-id="${assetId}" title="点击查看资产详情">${assetId}</span>`;
+  });
   
   // Convert paragraphs (double line breaks)
   formatted = formatted.replace(/\n\n/g, '</p><p class="script-paragraph">');
@@ -2288,8 +5004,10 @@ const navItems = computed(() => [
   { id: 'integrated', name: t('integratedVoiceover'), icon: FileVideo },
   { id: 'knowledge', name: t('knowledgeDatabase'), icon: Database },
   { id: 'voices', name: t('voiceLibrary'), icon: Mic },
+  { id: 'images', name: t('imageManagement'), icon: Image },
   { id: 'search', name: t('aiSearch'), icon: Search },
   { id: 'trending', name: t('hotTopics'), icon: Flame },
+  { id: 'email', name: t('emailMarketing'), icon: Mail },
 ]);
 
 const activeItem = computed(() => navItems.value.find(i => i.id === activeTab.value));
@@ -2300,11 +5018,21 @@ const setActiveTab = (id: string) => {
     fetchVoices();
   } else if (id === 'knowledge') {
     fetchKnowledgeDocs();
+    fetchTags(); // Load available tags when switching to knowledge tab
   } else if (id === 'academic') {
     fetchAcademicHistory();
   } else if (id === 'integrated') {
     // Reset integrated voiceover state
     resetIntegratedForm();
+  } else if (id === 'images') {
+    fetchImages();
+  } else if (id === 'trending') {
+    fetchTrendingTopics();
+    fetchLatestNews();
+  } else if (id === 'email') {
+    fetchEmailSubscribers();
+    fetchEmailTemplates();
+    fetchEmailConfig();
   }
 };
 
@@ -2326,7 +5054,8 @@ const resetIntegratedForm = () => {
     speaker_name: '',
     include_vox_intro: true,
     style_preference: '',
-    language: currentLanguage.value
+    language: currentLanguage.value,
+    word_limit: null  // 重置字数限制为默认
   };
   integratedFiles.value = [];
   integratedTaskId.value = null;
@@ -2336,17 +5065,39 @@ const resetIntegratedForm = () => {
   stopIntegratedPolling();
 };
 
+const retryIntegratedGeneration = () => {
+  // 清除错误状态但保留表单数据和文件
+  integratedError.value = '';
+  integratedTaskId.value = null;
+  integratedStatus.value = null;
+  integratedResult.value = null;
+  stopIntegratedPolling();
+  
+  // 重新提交
+  submitIntegratedTask();
+};
+
 const handleIntegratedFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files) {
-    integratedFiles.value = Array.from(target.files);
+    // 追加新文件到现有列表（去重）
+    const newFiles = Array.from(target.files);
+    const existingNames = new Set(integratedFiles.value.map(f => f.name));
+    const uniqueNewFiles = newFiles.filter(f => !existingNames.has(f.name));
+    integratedFiles.value = [...integratedFiles.value, ...uniqueNewFiles];
+    // 清空 input 以便可以重复选择同一文件
+    target.value = '';
   }
 };
 
 const handleIntegratedFileDrop = (event: DragEvent) => {
   isDraggingIntegrated.value = false;
   if (event.dataTransfer?.files) {
-    integratedFiles.value = Array.from(event.dataTransfer.files);
+    // 追加拖拽的文件到现有列表（去重）
+    const newFiles = Array.from(event.dataTransfer.files);
+    const existingNames = new Set(integratedFiles.value.map(f => f.name));
+    const uniqueNewFiles = newFiles.filter(f => !existingNames.has(f.name));
+    integratedFiles.value = [...integratedFiles.value, ...uniqueNewFiles];
   }
 };
 
@@ -2358,6 +5109,21 @@ const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+};
+
+// 过滤无效的 key_numbers（如 "1. The" 这样的无意义数据）
+const filterValidKeyNumbers = (keyNumbers: string[] | undefined): string[] => {
+  if (!keyNumbers || !Array.isArray(keyNumbers)) return [];
+  return keyNumbers.filter(num => {
+    if (!num || typeof num !== 'string') return false;
+    // 过滤掉以 "1. " 开头但后面不是数字的项
+    if (/^\d+\.\s*[A-Za-z]/.test(num)) return false;
+    // 过滤掉太短的项（少于2个字符）
+    if (num.trim().length < 2) return false;
+    // 过滤掉重复的 "1. The" 类型
+    if (num.trim().toLowerCase().startsWith('1. the')) return false;
+    return true;
+  });
 };
 
 // Open document detail modal
@@ -2379,6 +5145,159 @@ const openDocumentDetail = (docId: string) => {
     console.warn('[Document Detail] No parsed documents available');
     alert(currentLanguage.value === 'zh' ? '文档数据未加载' : 'Document data not loaded');
   }
+};
+
+// Open asset detail modal
+const openAssetDetail = (assetId: string) => {
+  console.log('[Asset Detail] Opening asset:', assetId);
+  
+  // Find the asset from visual_asset_ledger
+  if (integratedResult.value?.visual_asset_ledger?.assets) {
+    const asset = integratedResult.value.visual_asset_ledger.assets.find((a: any) => a.asset_id === assetId);
+    if (asset) {
+      selectedAsset.value = asset;
+      assetDetailOpen.value = true;
+      console.log('[Asset Detail] Asset found:', asset);
+    } else {
+      // 资产不存在时，创建一个占位资产对象显示基本信息
+      console.warn('[Asset Detail] Asset not found in ledger:', assetId);
+      selectedAsset.value = {
+        asset_id: assetId,
+        asset_type: assetId.includes('FIG') ? 'FIG' : 'TAB',
+        caption_or_title: `${assetId} (${currentLanguage.value === 'zh' ? '资产未在台账中' : 'Not in ledger'})`,
+        location_anchor: currentLanguage.value === 'zh' 
+          ? '该资产在结构设计中被引用，但未在图表台账中找到对应数据。这可能是因为原文档中未包含此图表，或提取过程中未能识别。'
+          : 'This asset is referenced in the structure but not found in the visual asset ledger. This may be because the original document does not contain this figure/table, or it was not recognized during extraction.'
+      };
+      assetDetailOpen.value = true;
+    }
+  } else {
+    console.warn('[Asset Detail] No visual assets available');
+    // 同样创建占位对象
+    selectedAsset.value = {
+      asset_id: assetId,
+      asset_type: assetId.includes('FIG') ? 'FIG' : 'TAB',
+      caption_or_title: assetId,
+      location_anchor: currentLanguage.value === 'zh' 
+        ? '图表台账数据未加载' 
+        : 'Visual asset ledger not loaded'
+    };
+    assetDetailOpen.value = true;
+  }
+};
+
+// Handle clicks on evidence and asset badges in script content
+const handleScriptContentClick = (event: MouseEvent) => {
+  const target = event.target as HTMLElement;
+  
+  // Handle clickable evidence
+  if (target.classList.contains('clickable-evidence')) {
+    const evidenceId = target.getAttribute('data-evidence-id');
+    if (evidenceId) {
+      console.log('[Script Click] Evidence clicked:', evidenceId);
+      showEvidenceDetail(evidenceId);
+    }
+    return;
+  }
+  
+  // Handle clickable asset (figure/table badges and D1-FIG-1 style references)
+  if (target.classList.contains('clickable-asset')) {
+    const assetId = target.getAttribute('data-asset-id');
+    if (assetId) {
+      console.log('[Script Click] Asset clicked:', assetId);
+      openAssetDetail(assetId);
+    }
+    return;
+  }
+};
+
+// Show evidence detail
+const showEvidenceDetail = (evidenceId: string) => {
+  console.log('[Evidence Detail] Showing evidence:', evidenceId);
+  
+  // 证据标记可能包含多个引用，如 "D1-F1, D2-F1" 或 "D1-1, D2-1"
+  const evidenceRefs = evidenceId.split(',').map(s => s.trim());
+  const foundEvidences: any[] = [];
+  
+  // evidence_ledger 结构: [{doc_id: "D1", findings: [{finding_index: 1, claim: "..."}]}]
+  if (integratedResult.value?.evidence_ledger && Array.isArray(integratedResult.value.evidence_ledger)) {
+    for (const ref of evidenceRefs) {
+      // 解析引用格式，兼容多种变体:
+      // D1-F1 -> doc_id: D1, finding_index: 1
+      // D1-1  -> doc_id: D1, finding_index: 1
+      // D1-f1 -> doc_id: D1, finding_index: 1
+      const match = ref.match(/^(D\d+)-[Ff]?(\d+)$/);
+      if (match) {
+        const docId = match[1];
+        const findingIndex = parseInt(match[2]);
+        
+        // 在 evidence_ledger 中查找对应文档
+        const docLedger = integratedResult.value.evidence_ledger.find(
+          (ledger: any) => ledger.doc_id === docId
+        );
+        
+        if (docLedger && docLedger.findings) {
+          // 查找对应的 finding
+          const finding = docLedger.findings.find(
+            (f: any) => f.finding_index === findingIndex
+          );
+          
+          if (finding) {
+            foundEvidences.push({
+              ref: ref,
+              docTitle: docLedger.title,
+              claim: finding.claim,
+              type: finding.type,
+              numbers: finding.numbers || []
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  if (foundEvidences.length > 0) {
+    // 构建显示内容
+    let message = currentLanguage.value === 'zh' ? '📚 证据详情\n\n' : '📚 Evidence Details\n\n';
+    
+    for (const ev of foundEvidences) {
+      message += `【${ev.ref}】\n`;
+      message += `${currentLanguage.value === 'zh' ? '来源' : 'Source'}: ${ev.docTitle}\n`;
+      message += `${currentLanguage.value === 'zh' ? '类型' : 'Type'}: ${ev.type}\n`;
+      message += `${currentLanguage.value === 'zh' ? '内容' : 'Content'}: ${ev.claim}\n`;
+      if (ev.numbers.length > 0) {
+        message += `${currentLanguage.value === 'zh' ? '关键数字' : 'Key Numbers'}: ${ev.numbers.join(', ')}\n`;
+      }
+      message += '\n';
+    }
+    
+    alert(message);
+    return;
+  }
+  
+  // If not found in evidence_ledger, try to find in visual_asset_ledger (for figures)
+  if (evidenceId.includes('FIG') || evidenceId.includes('TAB')) {
+    openAssetDetail(evidenceId);
+    return;
+  }
+  
+  // 如果还是找不到，显示引用信息而不是错误
+  console.warn('[Evidence Detail] Evidence not found:', evidenceId);
+  
+  // 构建一个友好的提示信息
+  let message = currentLanguage.value === 'zh' 
+    ? `📚 证据引用: ${evidenceId}\n\n该证据引用在证据台账中未找到对应记录。\n\n可能的原因：\n• 证据编号格式与台账不匹配\n• 该证据来自未被完整解析的文档部分`
+    : `📚 Evidence Reference: ${evidenceId}\n\nThis evidence reference was not found in the evidence ledger.\n\nPossible reasons:\n• Evidence ID format mismatch\n• Evidence from incompletely parsed document section`;
+  
+  // 尝试提供更多上下文
+  if (integratedResult.value?.evidence_ledger && Array.isArray(integratedResult.value.evidence_ledger)) {
+    const availableDocs = integratedResult.value.evidence_ledger.map((l: any) => l.doc_id).join(', ');
+    message += currentLanguage.value === 'zh' 
+      ? `\n\n可用的文档: ${availableDocs}`
+      : `\n\nAvailable documents: ${availableDocs}`;
+  }
+  
+  alert(message);
 };
 
 const submitIntegratedTask = async () => {
@@ -2405,6 +5324,10 @@ const submitIntegratedTask = async () => {
       formData.append('style_preference', integratedForm.value.style_preference);
     }
     formData.append('language', integratedForm.value.language);
+    // 添加字数限制参数（如果用户选择了）
+    if (integratedForm.value.word_limit !== null) {
+      formData.append('word_limit', String(integratedForm.value.word_limit));
+    }
     
     integratedFiles.value.forEach(file => {
       formData.append('files', file);
@@ -2506,6 +5429,7 @@ const pollIntegratedStatus = async () => {
     if (status.status === 'completed') {
       console.log('[Integrated] Task completed!');
       integratedResult.value = status.result;
+      integratedParsedDocs.value = status.parsed_docs || [];
       stopIntegratedPolling();
     } else if (status.status === 'failed') {
       console.error('[Integrated] Task failed!');
@@ -2541,10 +5465,399 @@ const getStepName = (step: string): string => {
 
 const copyIntegratedContent = async (text: string) => {
   try {
-    await navigator.clipboard.writeText(text);
+    // 尝试使用 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // 回退方案：使用 execCommand
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (!successful) {
+        throw new Error('execCommand copy failed');
+      }
+    }
     alert(t('copied'));
   } catch (error) {
+    console.error('Copy failed:', error);
     alert(t('copyFailed'));
+  }
+};
+
+// Integrated Voiceover 编辑功能
+const startEditIntegratedFinal = () => {
+  if (integratedResult.value?.script_final) {
+    editedIntegratedFinal.value = integratedResult.value.script_final;
+    isEditingIntegratedFinal.value = true;
+  }
+};
+
+const saveEditIntegratedFinal = () => {
+  if (integratedResult.value && editedIntegratedFinal.value.trim()) {
+    integratedResult.value.script_final = editedIntegratedFinal.value;
+    isEditingIntegratedFinal.value = false;
+    alert(currentLanguage.value === 'zh' ? '✅ 内容已保存' : '✅ Content saved');
+  }
+};
+
+const cancelEditIntegratedFinal = () => {
+  isEditingIntegratedFinal.value = false;
+  editedIntegratedFinal.value = '';
+};
+
+const downloadIntegratedFinal = async () => {
+  if (!integratedResult.value || !integratedResult.value.script_final) {
+    alert('没有可下载的内容');
+    return;
+  }
+  
+  try {
+    // 动态导入 html2pdf
+    const html2pdf = (await import('html2pdf.js')).default;
+    
+    // 获取格式化后的 HTML 内容（包含图片）
+    const htmlContent = formatScriptText(integratedResult.value.script_final);
+    
+    // 创建临时容器
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    tempDiv.style.padding = '20px';
+    tempDiv.style.fontFamily = 'Arial, sans-serif';
+    tempDiv.style.lineHeight = '1.6';
+    tempDiv.style.color = '#333';
+    
+    // 添加标题
+    const topic = integratedResult.value.request?.topic_hint || '口播稿';
+    const titleDiv = document.createElement('div');
+    titleDiv.style.fontSize = '24px';
+    titleDiv.style.fontWeight = 'bold';
+    titleDiv.style.marginBottom = '20px';
+    titleDiv.style.textAlign = 'center';
+    titleDiv.textContent = topic;
+    tempDiv.insertBefore(titleDiv, tempDiv.firstChild);
+    
+    // 添加样式
+    const styleDiv = document.createElement('style');
+    styleDiv.textContent = `
+      .script-heading-main {
+        font-size: 20px;
+        font-weight: bold;
+        margin: 20px 0 10px 0;
+        color: #1a1a1a;
+      }
+      .script-heading-sub {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 15px 0 8px 0;
+        color: #333;
+      }
+      .script-paragraph {
+        margin: 10px 0;
+        line-height: 1.8;
+      }
+      .figure-container {
+        margin: 20px 0;
+        text-align: center;
+        page-break-inside: avoid;
+      }
+      .figure-image {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      .figure-caption {
+        font-size: 14px;
+        color: #666;
+        font-style: italic;
+        margin: 5px 0;
+      }
+    `;
+    tempDiv.appendChild(styleDiv);
+    
+    // 创建文件名
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `VoxChina_${topic.substring(0, 20)}_${timestamp}.pdf`;
+    
+    // 配置 PDF 选项
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        letterRendering: true
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait' 
+      }
+    };
+    
+    // 生成 PDF
+    console.log('[Integrated] Generating PDF...');
+    await html2pdf().set(opt).from(tempDiv).save();
+    console.log('[Integrated] PDF downloaded successfully');
+    
+  } catch (error) {
+    console.error('[Integrated] Download error:', error);
+    alert('下载失败，请重试。如果问题持续，请联系管理员。');
+  }
+};
+
+// 下载 Word 格式的口播稿
+const downloadIntegratedWord = async () => {
+  if (!integratedResult.value || !integratedResult.value.script_final) {
+    alert(currentLanguage.value === 'zh' ? '没有可下载的内容' : 'No content to download');
+    return;
+  }
+  
+  try {
+    const token = localStorage.getItem('vox_token');
+    const topic = integratedResult.value.request?.topic_hint || '口播稿';
+    
+    console.log('[Integrated] Starting Word download for:', topic);
+    
+    // 收集图片资产信息
+    const assets = integratedResult.value.visual_asset_ledger?.assets || [];
+    const imageAssets = assets
+      .filter((a: any) => a.asset_type === 'FIG' && a.image_path)
+      .map((a: any) => ({
+        asset_id: a.asset_id,
+        caption: a.caption_or_title || a.asset_id,
+        image_path: a.image_path
+      }));
+    
+    console.log('[Integrated] Image assets for Word:', imageAssets.length);
+    
+    const response = await fetch(`${API_BASE_URL}/api/v1/integrated-voiceover/download-word`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        content: integratedResult.value.script_final,
+        title: topic,
+        image_assets: imageAssets
+      })
+    });
+    
+    if (!response.ok) {
+      // 尝试获取错误详情
+      let errorDetail = '';
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.detail || '';
+      } catch {
+        errorDetail = response.statusText;
+      }
+      console.error('[Integrated] Download failed:', response.status, errorDetail);
+      throw new Error(`Download failed: ${response.status} ${errorDetail}`);
+    }
+    
+    // 获取文件并下载
+    const blob = await response.blob();
+    
+    if (blob.size === 0) {
+      throw new Error('Empty file received');
+    }
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const timestamp = new Date().toISOString().slice(0, 10);
+    // 清理文件名中的非法字符
+    const safeTopic = topic.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 20);
+    a.download = `VoxChina_${safeTopic}_${timestamp}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log('[Integrated] Word document downloaded successfully');
+  } catch (error: any) {
+    console.error('[Integrated] Word download error:', error);
+    const errorMsg = error.message || 'Unknown error';
+    alert(currentLanguage.value === 'zh' ? `下载失败: ${errorMsg}` : `Download failed: ${errorMsg}`);
+  }
+};
+
+// 打开 Integrated Voiceover 标签选择模态框
+const openIntegratedTagModal = async () => {
+  if (!integratedResult.value || !integratedResult.value.script_final) {
+    alert(currentLanguage.value === 'zh' ? '没有可保存的内容' : 'No content to save');
+    return;
+  }
+  
+  // 重置状态
+  integratedSelectedTags.value = [];
+  integratedRecommendedTags.value = [];
+  integratedCustomTag.value = '';
+  showIntegratedTagModal.value = true;
+  
+  // 自动获取推荐标签
+  await fetchIntegratedRecommendedTags();
+};
+
+// 获取 Integrated Voiceover 推荐标签
+const fetchIntegratedRecommendedTags = async () => {
+  if (!integratedResult.value?.script_final) return;
+  
+  loadingIntegratedTags.value = true;
+  
+  try {
+    const text = integratedResult.value.script_final.substring(0, 2000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/v1/integrated-voiceover/recommend-tags`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({ text, limit: 8 })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get tags');
+    }
+    
+    const data = await response.json();
+    integratedRecommendedTags.value = data.tags || [];
+    
+    console.log('[Integrated] Recommended tags:', integratedRecommendedTags.value);
+    
+  } catch (error) {
+    console.error('[Integrated] Failed to get recommended tags:', error);
+  } finally {
+    loadingIntegratedTags.value = false;
+  }
+};
+
+// 切换 Integrated Voiceover 标签选择
+const toggleIntegratedTag = (tag: string) => {
+  const index = integratedSelectedTags.value.indexOf(tag);
+  if (index === -1) {
+    integratedSelectedTags.value.push(tag);
+  } else {
+    integratedSelectedTags.value.splice(index, 1);
+  }
+};
+
+// 添加自定义标签
+const addIntegratedCustomTag = () => {
+  const tag = integratedCustomTag.value.trim();
+  if (tag && !integratedSelectedTags.value.includes(tag)) {
+    integratedSelectedTags.value.push(tag);
+    integratedCustomTag.value = '';
+  }
+};
+
+// 确认保存到知识库
+const confirmSaveIntegratedToKB = async () => {
+  if (!integratedResult.value || !integratedResult.value.script_final) {
+    return;
+  }
+  
+  if (isSavingIntegratedToKB.value) return;
+  
+  try {
+    isSavingIntegratedToKB.value = true;
+    
+    const tagsToSave = integratedSelectedTags.value.length > 0 
+      ? integratedSelectedTags.value 
+      : integratedRecommendedTags.value;
+    
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/integrated-voiceover/save-to-kb`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+        },
+        body: JSON.stringify({
+          script_final: integratedResult.value.script_final,
+          topic_hint: integratedResult.value.request?.topic_hint || '',
+          speaker_name: integratedResult.value.request?.speaker_name || '',
+          speaker_affiliation: integratedResult.value.request?.speaker_affiliation || '',
+          task_id: integratedTaskId.value || '',
+          tags: tagsToSave
+        })
+      }
+    );
+    
+    const data = await response.json();
+    
+    if (response.ok && data.status === 'success') {
+      showIntegratedTagModal.value = false;
+      alert(currentLanguage.value === 'zh' ? '✅ 已成功保存到知识库' : '✅ Successfully saved to knowledge base');
+    } else {
+      throw new Error(data.detail || 'Save failed');
+    }
+  } catch (error: any) {
+    console.error('Failed to save to knowledge base:', error);
+    const errorMsg = error.message || 'Unknown error';
+    alert(currentLanguage.value === 'zh' ? `❌ 保存失败: ${errorMsg}` : `❌ Save failed: ${errorMsg}`);
+  } finally {
+    isSavingIntegratedToKB.value = false;
+  }
+};
+
+// Save Integrated Voiceover to Knowledge Base (legacy, kept for compatibility)
+const saveIntegratedToKB = async () => {
+  if (!integratedResult.value || !integratedResult.value.script_final) {
+    alert(currentLanguage.value === 'zh' ? '没有可保存的内容' : 'No content to save');
+    return;
+  }
+  
+  if (isSavingIntegratedToKB.value) return;
+  
+  try {
+    isSavingIntegratedToKB.value = true;
+    
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/integrated-voiceover/save-to-kb`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+        },
+        body: JSON.stringify({
+          script_final: integratedResult.value.script_final,
+          topic_hint: integratedResult.value.request?.topic_hint || '',
+          speaker_name: integratedResult.value.request?.speaker_name || '',
+          speaker_affiliation: integratedResult.value.request?.speaker_affiliation || '',
+          task_id: integratedTaskId.value || ''
+        })
+      }
+    );
+    
+    const data = await response.json();
+    
+    if (response.ok && data.status === 'success') {
+      alert(currentLanguage.value === 'zh' ? '✅ 已成功保存到知识库' : '✅ Successfully saved to knowledge base');
+    } else {
+      throw new Error(data.detail || 'Save failed');
+    }
+  } catch (error: any) {
+    console.error('Failed to save to knowledge base:', error);
+    const errorMsg = error.message || 'Unknown error';
+    alert(currentLanguage.value === 'zh' ? `❌ 保存失败: ${errorMsg}` : `❌ Save failed: ${errorMsg}`);
+  } finally {
+    isSavingIntegratedToKB.value = false;
   }
 };
 
@@ -2667,6 +5980,59 @@ const deleteVoice = async (id: string) => {
   }
 };
 
+// 文本转语音功能
+const generateTTSAudio = async () => {
+  if (!ttsInputText.value.trim() || !ttsSelectedVoiceId.value) return;
+  
+  generatingTTSAudio.value = true;
+  ttsGeneratedAudioUrl.value = '';
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/voices/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({
+        voice_id: ttsSelectedVoiceId.value,
+        text: ttsInputText.value,
+        language: currentLanguage.value
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || '生成失败');
+    }
+    
+    const data = await response.json();
+    // 添加时间戳防止浏览器缓存
+    const timestamp = new Date().getTime();
+    ttsGeneratedAudioUrl.value = `${API_BASE_URL}${data.audio_url}?t=${timestamp}`;
+    
+    console.log('[TTS] Generated audio:', ttsGeneratedAudioUrl.value);
+    
+  } catch (error: any) {
+    console.error('[TTS] Error:', error);
+    alert(currentLanguage.value === 'zh' ? `生成失败: ${error.message}` : `Generation failed: ${error.message}`);
+  } finally {
+    generatingTTSAudio.value = false;
+  }
+};
+
+const downloadTTSAudio = () => {
+  if (!ttsGeneratedAudioUrl.value) return;
+  
+  const a = document.createElement('a');
+  a.href = ttsGeneratedAudioUrl.value;
+  const timestamp = new Date().toISOString().slice(0, 10);
+  a.download = `tts_audio_${timestamp}.wav`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
 const previewVoice = async (id: string) => {
   previewLoading.value = id;
   
@@ -2680,14 +6046,16 @@ const previewVoice = async (id: string) => {
       body: JSON.stringify({
         voice_id: id,
         text: text,
-        language: currentLocale.value
+        language: currentLanguage.value
       })
     });
     
     if (!response.ok) throw new Error("Preview failed");
     
     const data = await response.json();
-    previewAudioUrl.value = { ...previewAudioUrl.value, [id]: `${API_BASE_URL}${data.audio_url}` };
+    // 添加时间戳防止浏览器缓存
+    const timestamp = new Date().getTime();
+    previewAudioUrl.value = { ...previewAudioUrl.value, [id]: `${API_BASE_URL}${data.audio_url}?t=${timestamp}` };
     
   } catch (e) {
     console.error(e);
@@ -2854,16 +6222,111 @@ const startAcademicExtraction = async () => {
   }
 };
 
+// 获取 Academic Extract 推荐标签
+const fetchAcademicRecommendedTags = async () => {
+  if (!academicResult.value) return;
+  
+  loadingAcademicTags.value = true;
+  
+  try {
+    const text = `${academicResult.value.summary_zh || ''}\n${academicResult.value.summary_en || ''}`;
+    
+    const response = await fetch(`${API_BASE_URL}/api/v1/academic-extract/recommend-tags`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({ text, limit: 8 })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get tags');
+    }
+    
+    const data = await response.json();
+    academicRecommendedTags.value = data.tags || data || [];
+    
+    console.log('[Academic] Recommended tags:', academicRecommendedTags.value);
+    
+  } catch (error) {
+    console.error('[Academic] Failed to get recommended tags:', error);
+    alert(currentLanguage.value === 'zh' ? '获取推荐标签失败' : 'Failed to get recommended tags');
+  } finally {
+    loadingAcademicTags.value = false;
+  }
+};
+
+// 切换 Academic Extract 标签选择
+const toggleAcademicTag = (tag: string) => {
+  const index = academicSelectedTags.value.indexOf(tag);
+  if (index === -1) {
+    academicSelectedTags.value.push(tag);
+  } else {
+    academicSelectedTags.value.splice(index, 1);
+  }
+};
+
+// 添加自定义标签
+const addAcademicCustomTag = () => {
+  const tag = academicCustomTag.value.trim();
+  if (tag && !academicSelectedTags.value.includes(tag) && !academicRecommendedTags.value.includes(tag)) {
+    academicSelectedTags.value.push(tag);
+    academicCustomTag.value = '';
+  } else if (tag && !academicSelectedTags.value.includes(tag)) {
+    // 如果标签在推荐列表中但未选中，则选中它
+    academicSelectedTags.value.push(tag);
+    academicCustomTag.value = '';
+  }
+};
+
 const copyAcademicResult = async () => {
   if (!academicResult.value) return;
   const text = `【Chinese Summary】\n${academicResult.value.summary_zh}\n\n【English Summary】\n${academicResult.value.summary_en}`;
   try {
-    await navigator.clipboard.writeText(text);
-    alert('✅ Copied to clipboard');
+    // 尝试使用 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // 回退方案：使用 execCommand
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    alert(currentLanguage.value === 'zh' ? '✅ 已复制到剪贴板' : '✅ Copied to clipboard');
   } catch (e) {
     console.error('Failed to copy:', e);
-    alert('❌ Copy failed');
+    alert(currentLanguage.value === 'zh' ? '❌ 复制失败' : '❌ Copy failed');
   }
+};
+
+// Academic Extract 编辑功能
+const startEditAcademicSummary = () => {
+  if (academicResult.value) {
+    editedAcademicSummaryZh.value = academicResult.value.summary_zh || '';
+    editedAcademicSummaryEn.value = academicResult.value.summary_en || '';
+    isEditingAcademicSummary.value = true;
+  }
+};
+
+const saveEditAcademicSummary = () => {
+  if (academicResult.value) {
+    academicResult.value.summary_zh = editedAcademicSummaryZh.value;
+    academicResult.value.summary_en = editedAcademicSummaryEn.value;
+    isEditingAcademicSummary.value = false;
+    alert(currentLanguage.value === 'zh' ? '✅ 摘要已保存' : '✅ Summary saved');
+  }
+};
+
+const cancelEditAcademicSummary = () => {
+  isEditingAcademicSummary.value = false;
+  editedAcademicSummaryZh.value = '';
+  editedAcademicSummaryEn.value = '';
 };
 
 const downloadAcademicResult = () => {
@@ -2883,6 +6346,115 @@ const downloadAcademicResult = () => {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+};
+
+// 下载 Word 格式的学术摘要
+const downloadAcademicWord = async () => {
+  if (!academicResult.value) {
+    alert(currentLanguage.value === 'zh' ? '没有可下载的内容' : 'No content to download');
+    return;
+  }
+  
+  try {
+    const token = localStorage.getItem('vox_token');
+    
+    console.log('[Academic] Starting Word download...');
+    
+    const response = await fetch(`${API_BASE_URL}/api/v1/academic-extract/download-word`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        summary_zh: academicResult.value.summary_zh,
+        summary_en: academicResult.value.summary_en,
+        fact_table: academicResult.value.fact_table
+      })
+    });
+    
+    if (!response.ok) {
+      // 尝试获取错误详情
+      let errorDetail = '';
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.detail || '';
+      } catch {
+        errorDetail = response.statusText;
+      }
+      console.error('[Academic] Download failed:', response.status, errorDetail);
+      throw new Error(`Download failed: ${response.status} ${errorDetail}`);
+    }
+    
+    // 获取文件并下载
+    const blob = await response.blob();
+    
+    if (blob.size === 0) {
+      throw new Error('Empty file received');
+    }
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const timestamp = new Date().toISOString().slice(0, 10);
+    a.download = `academic_extract_${timestamp}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log('[Academic] Word document downloaded successfully');
+  } catch (error: any) {
+    console.error('[Academic] Word download error:', error);
+    const errorMsg = error.message || 'Unknown error';
+    alert(currentLanguage.value === 'zh' ? `下载失败: ${errorMsg}` : `Download failed: ${errorMsg}`);
+  }
+};
+
+// Save Academic Extract to Knowledge Base
+const saveAcademicToKB = async () => {
+  if (!academicResult.value) {
+    alert(currentLanguage.value === 'zh' ? '没有可保存的内容' : 'No content to save');
+    return;
+  }
+  
+  if (isSavingAcademicToKB.value) return;
+  
+  try {
+    isSavingAcademicToKB.value = true;
+    
+    const response = await fetch(
+      `${API_BASE_URL}/api/v1/academic-extract/save-to-kb`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+        },
+        body: JSON.stringify({
+          summary_zh: academicResult.value.summary_zh,
+          summary_en: academicResult.value.summary_en,
+          fact_table: academicResult.value.fact_table,
+          tags: academicSelectedTags.value.length > 0 ? academicSelectedTags.value : academicRecommendedTags.value,  // 优先使用用户选择的标签
+          task_id: academicResult.value.extract_id || ''  // 添加 task_id 用于关联跳转
+        })
+      }
+    );
+    
+    const data = await response.json();
+    
+    if (response.ok && data.status === 'success') {
+      alert(currentLanguage.value === 'zh' ? '✅ 已成功保存到知识库' : '✅ Successfully saved to knowledge base');
+    } else {
+      throw new Error(data.detail || 'Save failed');
+    }
+  } catch (error: any) {
+    console.error('Failed to save to knowledge base:', error);
+    const errorMsg = error.message || 'Unknown error';
+    alert(currentLanguage.value === 'zh' ? `❌ 保存失败: ${errorMsg}` : `❌ Save failed: ${errorMsg}`);
+  } finally {
+    isSavingAcademicToKB.value = false;
+  }
 };
 
 const fetchAcademicHistory = async () => {
@@ -3007,8 +6579,8 @@ const generateAcademicAudio = async () => {
   
   // Warn user about expected wait time
   if (!confirm(currentLanguage.value === 'zh' 
-    ? '音频生成需要约60-90秒，请耐心等待。确定继续吗？' 
-    : 'Audio generation takes about 60-90 seconds. Please wait patiently. Continue?')) {
+    ? '音频生成需要约2-5分钟（取决于文本长度），请耐心等待。确定继续吗？' 
+    : 'Audio generation takes about 2-5 minutes (depending on text length). Please wait patiently. Continue?')) {
     return;
   }
   
@@ -3016,9 +6588,9 @@ const generateAcademicAudio = async () => {
   audioUrl.value = '';
   
   try {
-    // Increase timeout for TTS generation (2 minutes)
+    // Increase timeout for TTS generation (5 minutes for long texts)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
     
     const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/voices/preview`, {
       method: 'POST',
@@ -3068,6 +6640,319 @@ const generateAcademicAudio = async () => {
   }
 };
 
+// TTS Functions for Integrated Voiceover
+const generateIntegratedAudio = async () => {
+  if (!integratedResult.value || !integratedResult.value.script_final) return;
+  
+  // Auto-select first voice if none selected
+  if (!selectedIntegratedVoiceId.value && voices.value.length > 0) {
+    selectedIntegratedVoiceId.value = voices.value[0].id;
+  }
+  
+  if (!selectedIntegratedVoiceId.value) {
+    alert(currentLanguage.value === 'zh' ? '请先选择一个声音' : 'Please select a voice first');
+    return;
+  }
+  
+  const text = integratedResult.value.script_final;
+    
+  if (!text) {
+    alert(currentLanguage.value === 'zh' ? '没有可用的脚本文本' : 'No script text available');
+    return;
+  }
+  
+  // Warn user about expected wait time
+  if (!confirm(currentLanguage.value === 'zh' 
+    ? '音频生成需要约2-5分钟（取决于文本长度），请耐心等待。确定继续吗？' 
+    : 'Audio generation takes about 2-5 minutes (depending on text length). Please wait patiently. Continue?')) {
+    return;
+  }
+  
+  isGeneratingIntegratedAudio.value = true;
+  integratedAudioUrl.value = '';
+  
+  try {
+    // Increase timeout for TTS generation (5 minutes for long texts)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
+    
+    const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/voices/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        voice_id: selectedIntegratedVoiceId.value,
+        text: text,
+        language: 'zh' // Integrated Voiceover is typically in Chinese
+      }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`Generation failed: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[TTS Integrated] Raw response:', data);
+    
+    // Ensure URL is correct relative to API base if needed
+    if (API_BASE_URL && !data.audio_url.startsWith('http')) {
+      integratedAudioUrl.value = `${API_BASE_URL}${data.audio_url}`;
+      console.log('[TTS Integrated] Using full URL:', integratedAudioUrl.value);
+    } else {
+      integratedAudioUrl.value = data.audio_url;
+      console.log('[TTS Integrated] Using relative URL:', integratedAudioUrl.value);
+    }
+    
+    alert(currentLanguage.value === 'zh' ? '✅ 音频生成成功！' : '✅ Audio generated successfully!');
+    
+  } catch (e: any) {
+    console.error('TTS Integrated Generation failed:', e);
+    if (e.name === 'AbortError') {
+      alert(currentLanguage.value === 'zh' 
+        ? '⏱️ 请求超时，音频生成时间过长。请稍后重试或联系管理员。' 
+        : '⏱️ Request timeout. Please try again later or contact administrator.');
+    } else {
+      alert((currentLanguage.value === 'zh' ? '音频生成失败' : 'Audio generation failed') + '\n' + (e.message || ''));
+    }
+  } finally {
+    isGeneratingIntegratedAudio.value = false;
+  }
+};
+
+// Tag Management Actions
+const fetchTags = async () => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/knowledge/tags`);
+    if (response.ok) {
+      availableTags.value = await response.json();
+    }
+  } catch (e) {
+    console.error("Failed to fetch tags", e);
+  }
+};
+
+const getRecommendedTags = async (text: string) => {
+  tagsLoading.value = true;
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/knowledge/recommend-tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, limit: 5 })
+    });
+    
+    if (response.ok) {
+      recommendedTags.value = await response.json();
+      // 只显示推荐标签，不自动选中，让用户自己决定是否采用
+      console.log('[Tag Recommendation] 推荐标签:', recommendedTags.value);
+    }
+  } catch (e) {
+    console.error("Failed to get recommended tags", e);
+  } finally {
+    tagsLoading.value = false;
+  }
+};
+
+const toggleTag = (tag: string) => {
+  if (selectedTags.value.has(tag)) {
+    selectedTags.value.delete(tag);
+  } else {
+    selectedTags.value.add(tag);
+  }
+};
+
+const addCustomTag = () => {
+  const tag = customTagInput.value.trim();
+  if (tag && !selectedTags.value.has(tag)) {
+    selectedTags.value.add(tag);
+    // Optionally add to available tags locally for this session
+    if (!availableTags.value.includes(tag)) {
+      availableTags.value.push(tag);
+    }
+    customTagInput.value = '';
+  }
+};
+
+// Tag Filter Function
+const filterByTag = async () => {
+  // Reset page to 1 when filtering
+  knowledgePage.value = 1;
+  await fetchKnowledgeDocs();
+};
+
+// Add New Tag to Database
+const addNewTag = async () => {
+  const tag = newTagInput.value.trim();
+  if (!tag) return;
+
+  try {
+    tagsLoading.value = true;
+    const response = await fetch(`${API_BASE_URL}/api/v1/knowledge/tags`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ name: tag })
+    });
+
+    if (response.ok) {
+      alert(currentLanguage.value === 'zh' ? '标签添加成功！' : 'Tag added successfully!');
+      newTagInput.value = '';
+      await fetchTags();
+    } else {
+      throw new Error('Failed to add tag');
+    }
+  } catch (error) {
+    console.error('Error adding tag:', error);
+    alert(currentLanguage.value === 'zh' ? '添加标签失败' : 'Failed to add tag');
+  } finally {
+    tagsLoading.value = false;
+  }
+};
+
+// Delete Tag (Note: This only removes from local list, backend doesn't have delete endpoint)
+const deleteTag = async (tag: string) => {
+  if (confirm(currentLanguage.value === 'zh' 
+    ? `确定要删除标签 "${tag}" 吗？` 
+    : `Are you sure you want to delete tag "${tag}"?`)) {
+    // Remove from local list
+    availableTags.value = availableTags.value.filter(t => t !== tag);
+    alert(currentLanguage.value === 'zh' 
+      ? '标签已从列表中移除（注意：已使用此标签的文档不受影响）' 
+      : 'Tag removed from list (Note: Documents using this tag are not affected)');
+  }
+};
+
+// Upload Article Functions
+const openUploadArticleDialog = () => {
+  // 重置所有状态
+  uploadArticleFile.value = null;
+  uploadedFileContent.value = null;
+  selectedTags.value.clear();
+  recommendedTags.value = [];
+  customTagInput.value = '';
+  
+  // 加载可用标签
+  fetchTags();
+  
+  // 打开对话框
+  showUploadArticleDialog.value = true;
+};
+
+const handleUploadFileSelect = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    uploadArticleFile.value = target.files[0];
+    // 自动解析文件并推荐标签
+    await processUploadedFile(target.files[0]);
+  }
+};
+
+const handleUploadFileDrop = async (event: DragEvent) => {
+  isUploadDragging.value = false;
+  if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
+    uploadArticleFile.value = event.dataTransfer.files[0];
+    // 自动解析文件并推荐标签
+    await processUploadedFile(event.dataTransfer.files[0]);
+  }
+};
+
+const cancelUploadArticle = () => {
+  showUploadArticleDialog.value = false;
+  uploadArticleFile.value = null;
+  uploadedFileContent.value = null;
+  selectedTags.value.clear();
+  recommendedTags.value = [];
+  customTagInput.value = '';
+};
+
+// 处理文件上传并解析内容
+const uploadedFileContent = ref<any>(null);
+
+const processUploadedFile = async (file: File) => {
+  try {
+    tagsLoading.value = true;
+    
+    // 上传并解析文件
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const uploadResponse = await fetch(`${API_BASE_URL}/api/v1/knowledge/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error('File parsing failed');
+    }
+
+    uploadedFileContent.value = await uploadResponse.json();
+
+    // 自动推荐标签（不自动选中）
+    await getRecommendedTags(uploadedFileContent.value.title || uploadedFileContent.value.content?.substring(0, 200) || '');
+  } catch (error) {
+    console.error('Error processing file:', error);
+    alert(currentLanguage.value === 'zh' 
+      ? '文件解析失败，但您仍可手动选择标签并上传' 
+      : 'File parsing failed, but you can still select tags manually and upload');
+  } finally {
+    tagsLoading.value = false;
+  }
+};
+
+const uploadArticleToKB = async () => {
+  if (!uploadArticleFile.value || !uploadedFileContent.value) return;
+
+  try {
+    isUploadingArticle.value = true;
+
+    // 保存到知识库
+    const saveResponse = await fetch(`${API_BASE_URL}/api/v1/knowledge/documents`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        content: uploadedFileContent.value.content,
+        metadata: {
+          title: uploadedFileContent.value.title || uploadArticleFile.value.name,
+          type: 'UPLOADED',
+          filename: uploadArticleFile.value.name,
+          tags: Array.from(selectedTags.value),
+          created_at: new Date().toISOString()
+        }
+      })
+    });
+
+    if (!saveResponse.ok) {
+      throw new Error('Failed to save to knowledge base');
+    }
+
+    alert(currentLanguage.value === 'zh' 
+      ? '文章上传成功！' 
+      : 'Article uploaded successfully!');
+    
+    cancelUploadArticle();
+    await fetchKnowledgeDocs();
+  } catch (error) {
+    console.error('Error uploading article:', error);
+    alert(currentLanguage.value === 'zh' 
+      ? '上传失败，请重试' 
+      : 'Upload failed, please try again');
+  } finally {
+    isUploadingArticle.value = false;
+  }
+};
+
 // Knowledge Base Save Functions
 const saveToKnowledgeBase = async () => {
   if (!pendingKBSave.value) return;
@@ -3078,7 +6963,8 @@ const saveToKnowledgeBase = async () => {
     console.log('[KB Save] Saving to knowledge base...', {
       summary_zh_length: pendingKBSave.value.summary_zh?.length,
       summary_en_length: pendingKBSave.value.summary_en?.length,
-      has_fact_table: !!pendingKBSave.value.fact_table
+      has_fact_table: !!pendingKBSave.value.fact_table,
+      tags: Array.from(selectedTags.value)
     });
     
     // Show progress: Generating embeddings
@@ -3100,7 +6986,8 @@ const saveToKnowledgeBase = async () => {
       body: JSON.stringify({
         summary_zh: pendingKBSave.value.summary_zh || '',
         summary_en: pendingKBSave.value.summary_en || '',
-        fact_table: pendingKBSave.value.fact_table || {}
+        fact_table: pendingKBSave.value.fact_table || {},
+        tags: Array.from(selectedTags.value)
       }),
       signal: controller.signal
     });
@@ -3207,13 +7094,17 @@ const fetchKnowledgeDocs = async () => {
       
       if (response.ok) {
         const data = await response.json();
-        if (data.items) {
-          knowledgeDocs.value = data.items;
-          knowledgeTotal.value = data.total || data.items.length;
-        } else {
-          knowledgeDocs.value = data;
-          knowledgeTotal.value = data.length;
+        let docs = data.items || data;
+        
+        // Apply tag filter if selected
+        if (selectedTagFilter.value) {
+          docs = docs.filter((doc: any) => 
+            doc.payload.tags && doc.payload.tags.includes(selectedTagFilter.value)
+          );
         }
+        
+        knowledgeDocs.value = docs;
+        knowledgeTotal.value = docs.length;
       }
     } else {
       // List mode
@@ -3226,13 +7117,17 @@ const fetchKnowledgeDocs = async () => {
       
       if (response.ok) {
         const data = await response.json();
-        if (data.items) {
-          knowledgeDocs.value = data.items;
-          knowledgeTotal.value = data.total || data.items.length;
-        } else {
-          knowledgeDocs.value = data;
-          knowledgeTotal.value = data.length;
+        let docs = data.items || data;
+        
+        // Apply tag filter if selected
+        if (selectedTagFilter.value) {
+          docs = docs.filter((doc: any) => 
+            doc.payload.tags && doc.payload.tags.includes(selectedTagFilter.value)
+          );
         }
+        
+        knowledgeDocs.value = docs;
+        knowledgeTotal.value = docs.length;
       }
     }
   } catch (e) {
@@ -3301,6 +7196,120 @@ const viewKnowledgeDetail = (doc: any) => {
   alert(detailMsg);
 };
 
+// 导航到源任务（从知识库跳转到历史处理的文章）
+const navigateToSourceTask = (payload: any) => {
+  const sourceType = payload.source_type;
+  const sourceTaskId = payload.source_task_id;
+  
+  if (!sourceTaskId) {
+    alert(currentLanguage.value === 'zh' ? '无法找到源任务信息' : 'Source task information not found');
+    return;
+  }
+  
+  if (sourceType === 'integrated_voiceover') {
+    // 切换到 Integrated Voiceover 标签页并加载历史任务
+    activeTab.value = 'integrated';
+    // 尝试从历史记录中加载该任务
+    loadIntegratedHistoryTask(sourceTaskId);
+  } else if (sourceType === 'academic_extract') {
+    // 切换到 Academic Extract 标签页并加载历史任务
+    activeTab.value = 'academic';
+    // 尝试从历史记录中加载该任务
+    loadAcademicHistoryTask(sourceTaskId);
+  } else {
+    alert(currentLanguage.value === 'zh' 
+      ? `源任务类型: ${sourceType || '未知'}\n任务ID: ${sourceTaskId}` 
+      : `Source type: ${sourceType || 'Unknown'}\nTask ID: ${sourceTaskId}`);
+  }
+};
+
+// 加载 Integrated Voiceover 历史任务
+const loadIntegratedHistoryTask = async (taskId: string) => {
+  try {
+    console.log('[Integrated] Loading history task:', taskId);
+    const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/integrated-voiceover/status/${taskId}`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[Integrated] API response:', data);
+      
+      if (data.status === 'completed' && data.result) {
+        integratedResult.value = data.result;
+        integratedStatus.value = data;
+        integratedTaskId.value = taskId;
+        
+        // 确保 parsed_docs 被正确设置
+        console.log('[Integrated] parsed_docs:', data.parsed_docs?.length || 0, 'documents');
+        
+        alert(currentLanguage.value === 'zh' ? '✅ 已加载历史任务' : '✅ Historical task loaded');
+      } else {
+        console.warn('[Integrated] Task not completed:', data.status);
+        alert(currentLanguage.value === 'zh' ? '该任务尚未完成或结果不可用' : 'Task not completed or result unavailable');
+      }
+    } else if (response.status === 404) {
+      console.warn('[Integrated] Task not found in backend:', taskId);
+      alert(currentLanguage.value === 'zh' 
+        ? '历史任务未找到，可能已被清理或服务已重启' 
+        : 'Historical task not found, it may have been cleaned up or service restarted');
+    } else {
+      console.error('[Integrated] API error:', response.status);
+      alert(currentLanguage.value === 'zh' ? '无法加载历史任务' : 'Failed to load historical task');
+    }
+  } catch (error) {
+    console.error('Failed to load integrated history task:', error);
+    alert(currentLanguage.value === 'zh' ? '加载失败' : 'Load failed');
+  }
+};
+
+// 加载 Academic Extract 历史任务
+const loadAcademicHistoryTask = async (taskId: string) => {
+  try {
+    console.log('[Academic] Loading history task:', taskId);
+    
+    // 直接从 API 获取详情
+    const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/academic-extract/extracts/${taskId}`);
+    
+    if (response.ok) {
+      const detail = await response.json();
+      console.log('[Academic] Loaded detail:', detail);
+      
+      academicResult.value = {
+        extract_id: detail.id,
+        summary_zh: detail.summary_zh,
+        summary_en: detail.summary_en,
+        fact_table: detail.fact_table,
+        metadata: detail.metadata
+      };
+      
+      // 清除之前的标签选择
+      academicSelectedTags.value = [];
+      academicRecommendedTags.value = [];
+      
+      alert(currentLanguage.value === 'zh' ? '✅ 已加载历史任务' : '✅ Historical task loaded');
+    } else {
+      // 如果 API 获取失败，尝试从本地历史记录中查找
+      console.log('[Academic] API failed, trying local history...');
+      await fetchAcademicHistory();
+      const historyItem = academicHistory.value.find((item: any) => item.id === taskId);
+      
+      if (historyItem) {
+        academicResult.value = {
+          extract_id: historyItem.id,
+          summary_zh: historyItem.summary_zh,
+          summary_en: historyItem.summary_en,
+          fact_table: historyItem.fact_table
+        };
+        alert(currentLanguage.value === 'zh' ? '✅ 已加载历史任务' : '✅ Historical task loaded');
+      } else {
+        alert(currentLanguage.value === 'zh' ? '无法找到该历史任务' : 'Historical task not found');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load academic history task:', error);
+    alert(currentLanguage.value === 'zh' ? '加载失败' : 'Load failed');
+  }
+};
+
 // LLM Config Actions
 const fetchLLMConfig = async () => {
   try {
@@ -3308,7 +7317,11 @@ const fetchLLMConfig = async () => {
     if (response.ok) {
       const data = await response.json()
       llmConfig.value = data
-      selectedModel.value = data.model
+      selectedProvider.value = data.provider || 'openai'
+      selectedModel.value = data.model || ''
+      // 不显示实际的 API Key，只显示是否已配置
+      selectedApiKey.value = ''
+      console.log('✅ LLM配置已加载:', data)
     }
   } catch (e) {
     console.error("Failed to fetch LLM config", e)
@@ -3337,22 +7350,36 @@ const fetchAvailableModels = async () => {
 }
 
 const saveLLMConfig = async () => {
+  // 验证必填字段
   if (!selectedModel.value) {
     llmConfigError.value = '请先选择一个模型'
     return
   }
   
+  if (selectedProvider.value === 'openai' && !selectedApiKey.value && !llmConfig.value.api_key_set) {
+    llmConfigError.value = '请输入 API Key'
+    return
+  }
+  
   llmConfigLoading.value = true
   llmConfigError.value = ''
-  console.log('🔄 保存配置，选择的模型:', selectedModel.value)
+  console.log('🔄 保存配置 - Provider:', selectedProvider.value, 'Model:', selectedModel.value)
   
   try {
+    const payload: any = {
+      provider: selectedProvider.value,
+      model: selectedModel.value
+    }
+    
+    // 只在有新 API Key 时才发送
+    if (selectedApiKey.value) {
+      payload.api_key = selectedApiKey.value
+    }
+    
     const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/llm/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: selectedModel.value
-      })
+      body: JSON.stringify(payload)
     })
     
     if (!response.ok) {
@@ -3379,6 +7406,1439 @@ const saveLLMConfig = async () => {
   }
 }
 
+// ==================== Integrated Voiceover History Management ====================
+const fetchIntegratedHistory = async () => {
+  loadingHistory.value = true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/integrated-voiceover/list`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      integratedHistoryList.value = data;
+    } else {
+      console.error('[Integrated History] Failed to fetch:', response.status);
+    }
+  } catch (e) {
+    console.error('[Integrated History] Error:', e);
+  } finally {
+    loadingHistory.value = false;
+  }
+};
+
+const deleteIntegratedTask = async (taskId: string) => {
+  if (!confirm(t('confirmDelete'))) return;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/integrated-voiceover/delete/${taskId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    if (response.ok) {
+      // Remove from list
+      integratedHistoryList.value = integratedHistoryList.value.filter(t => t.task_id !== taskId);
+    } else {
+      alert('删除失败');
+    }
+  } catch (e) {
+    console.error('[Integrated History] Delete error:', e);
+    alert('删除失败');
+  }
+};
+
+const loadIntegratedTask = async (taskId: string) => {
+  try {
+    console.log('[Integrated History] Loading task:', taskId);
+    const response = await fetch(`${API_BASE_URL}/api/v1/integrated-voiceover/status/${taskId}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    
+    console.log('[Integrated History] Response status:', response.status);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[Integrated History] Loaded task data:', data);
+      console.log('[Integrated History] Result present:', !!data.result);
+      console.log('[Integrated History] Parsed docs count:', data.parsed_docs?.length || 0);
+      
+      // Load the task result
+      integratedTaskId.value = taskId;
+      integratedStatus.value = {
+        status: data.status,
+        progress: data.progress || 100,
+        current_step: data.current_step || 'StepD',
+        error: data.error
+      };
+      integratedResult.value = data.result;
+      integratedParsedDocs.value = data.parsed_docs || [];
+      
+      // Set result tab to style profile by default
+      integratedResultTab.value = 'style';
+      
+      showIntegratedHistory.value = false;
+      
+      console.log('[Integrated History] ✅ Task loaded successfully');
+    } else {
+      const errorText = await response.text();
+      console.error('[Integrated History] Failed to load task. Status:', response.status);
+      console.error('[Integrated History] Error response:', errorText);
+      alert(`加载任务失败 (${response.status}): ${errorText.substring(0, 100)}`);
+    }
+  } catch (e) {
+    console.error('[Integrated History] Load error:', e);
+    console.error('[Integrated History] Error details:', e.message, e.stack);
+    alert(`加载任务失败: ${e.message}`);
+  }
+};
+
+// ==================== Image Management ====================
+const fetchImages = async () => {
+  loadingImages.value = true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/images/list`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      imageList.value = data.images || [];
+    } else {
+      console.error('[Image Management] Failed to fetch:', response.status);
+    }
+  } catch (e) {
+    console.error('[Image Management] Error:', e);
+  } finally {
+    loadingImages.value = false;
+  }
+};
+
+const deleteImage = async (filename: string, skipConfirm: boolean = false) => {
+  if (!skipConfirm && !confirm(`${t('confirmDelete')}`)) return;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/images/${filename}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    if (response.ok) {
+      imageList.value = imageList.value.filter(img => img.filename !== filename);
+      selectedImages.value.delete(filename);
+      return true;
+    } else {
+      return false;
+    }
+  } catch (e) {
+    console.error('[Image Management] Delete error:', e);
+    return false;
+  }
+};
+
+const deleteSelectedImages = async () => {
+  if (selectedImages.value.size === 0) {
+    alert('请先选择要删除的图片');
+    return;
+  }
+  
+  if (!confirm(`确定要删除选中的 ${selectedImages.value.size} 张图片吗？`)) return;
+  
+  // 批量删除，跳过单个确认
+  const promises = Array.from(selectedImages.value).map(filename => deleteImage(filename, true));
+  const results = await Promise.all(promises);
+  
+  // 统计成功和失败的数量
+  const successCount = results.filter(r => r).length;
+  const failCount = results.length - successCount;
+  
+  if (failCount > 0) {
+    alert(`删除完成：成功 ${successCount} 张，失败 ${failCount} 张`);
+  }
+  
+  selectedImages.value.clear();
+};
+
+const toggleImageSelection = (filename: string) => {
+  if (selectedImages.value.has(filename)) {
+    selectedImages.value.delete(filename);
+  } else {
+    selectedImages.value.add(filename);
+  }
+};
+
+const toggleSelectAll = () => {
+  if (selectedImages.value.size === imageList.value.length) {
+    selectedImages.value.clear();
+  } else {
+    imageList.value.forEach(img => selectedImages.value.add(img.filename));
+  }
+};
+
+const cleanupOldImages = async (days: number = 30) => {
+  if (!confirm(`确定要清理 ${days} 天前的旧图片吗？`)) return;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/images/cleanup?days=${days}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      alert(data.message);
+      fetchImages();
+    } else {
+      alert('清理失败');
+    }
+  } catch (e) {
+    console.error('[Image Management] Cleanup error:', e);
+    alert('清理失败');
+  }
+};
+
+// AI Search Functions
+const performSearch = async () => {
+  if (!searchQuery.value.trim()) {
+    alert(currentLanguage.value === 'zh' ? '请输入搜索内容' : 'Please enter search query');
+    return;
+  }
+
+  isSearching.value = true;
+  searchResults.value = null;
+  searchResultsList.value = [];
+  aiAnswer.value = '';
+  searchDuration.value = 0;
+
+  const startTime = Date.now();
+
+  try {
+    // Add to search history
+    if (!searchHistory.value.includes(searchQuery.value.trim())) {
+      searchHistory.value.unshift(searchQuery.value.trim());
+      if (searchHistory.value.length > 10) {
+        searchHistory.value = searchHistory.value.slice(0, 10);
+      }
+      // Save to localStorage
+      localStorage.setItem('vox_search_history', JSON.stringify(searchHistory.value));
+    }
+
+    if (searchType.value === 'ai_qa') {
+      // AI Q&A mode - use /api/v1/search/query
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/search/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: searchQuery.value.trim(),
+          language: searchLanguage.value,
+          limit: searchLimit.value
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      searchResults.value = data;
+      aiAnswer.value = data.answer || '';
+      searchResultsList.value = data.sources || [];
+
+    } else {
+      // Knowledge Base mode - use /api/v1/knowledge/search
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/v1/knowledge/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: searchQuery.value.trim(),
+          limit: searchLimit.value
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      searchResults.value = data;
+      searchResultsList.value = (data.items || []).map((item: any) => ({
+        id: item.id,
+        title: item.payload?.title || 'Untitled',
+        summary: item.payload?.summary || item.payload?.content || '',
+        content: item.payload?.content || '',
+        score: item.score || 0
+      }));
+    }
+
+    searchDuration.value = Date.now() - startTime;
+
+  } catch (e: any) {
+    console.error('Search failed:', e);
+    alert((currentLanguage.value === 'zh' ? '搜索失败：' : 'Search failed: ') + (e.message || ''));
+  } finally {
+    isSearching.value = false;
+  }
+};
+
+const clearSearchHistory = () => {
+  if (confirm(currentLanguage.value === 'zh' ? '确定清空搜索历史？' : 'Clear search history?')) {
+    searchHistory.value = [];
+    localStorage.removeItem('vox_search_history');
+  }
+};
+
+const viewSearchResult = (result: any) => {
+  // Show result details in a modal or expand inline
+  console.log('View result:', result);
+  alert(currentLanguage.value === 'zh' 
+    ? `标题: ${result.title}\n\n内容: ${result.summary || result.content}` 
+    : `Title: ${result.title}\n\nContent: ${result.summary || result.content}`
+  );
+};
+
+// Hot News Functions
+const generateHotPost = async () => {
+  if (!hotNewsTopic.value.trim()) return;
+  
+  hotNewsGenerating.value = true;
+  hotNewsResult.value = null;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({
+        topic: hotNewsTopic.value,
+        style: hotNewsStyle.value,
+        length: hotNewsLength.value,
+        language: currentLanguage.value,
+        generate_script: hotNewsGenerateScript.value
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('生成失败');
+    }
+    
+    const data = await response.json();
+    hotNewsResult.value = data;
+    
+  } catch (error) {
+    console.error('[Hot News] Generate error:', error);
+    alert(currentLanguage.value === 'en' ? 'Failed to generate post' : '生成推文失败');
+  } finally {
+    hotNewsGenerating.value = false;
+  }
+};
+
+const fetchTrendingTopics = async () => {
+  loadingTrending.value = true;
+  
+  try {
+    // 添加时间戳防止缓存
+    const timestamp = new Date().getTime();
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/trending?limit=10&_t=${timestamp}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`,
+        'Cache-Control': 'no-cache',
+        'Accept': 'application/json; charset=utf-8'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('获取失败');
+    }
+    
+    const data = await response.json();
+    trendingTopics.value = data.topics || [];
+    
+    console.log('[Hot News] Loaded trending topics:', trendingTopics.value.length);
+    
+  } catch (error) {
+    console.error('[Hot News] Fetch trending error:', error);
+  } finally {
+    loadingTrending.value = false;
+  }
+};
+
+const fetchLatestNews = async () => {
+  loadingNews.value = true;
+  
+  try {
+    // 构建请求体，包含新闻源筛选
+    const requestBody: any = {
+      max_items: 30
+    };
+    
+    // 如果选择了特定新闻源，添加筛选条件
+    if (selectedNewsSources.value.length > 0 && selectedNewsSources.value.length < availableNewsSources.value.length) {
+      requestBody.source_filter = selectedNewsSources.value;
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/fetch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`,
+        'Cache-Control': 'no-cache'
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      throw new Error('获取失败');
+    }
+    
+    const data = await response.json();
+    latestNews.value = data.news_list || [];
+    
+    console.log('[Hot News] Loaded latest news:', latestNews.value.length, 'with filter:', selectedNewsSources.value.length > 0 ? selectedNewsSources.value : 'all');
+    
+  } catch (error) {
+    console.error('[Hot News] Fetch news error:', error);
+  } finally {
+    loadingNews.value = false;
+  }
+};
+
+// 获取可用的新闻源列表
+const fetchNewsSources = async () => {
+  loadingNewsSources.value = true;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/sources`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('获取新闻源失败');
+    }
+    
+    const data = await response.json();
+    availableNewsSources.value = data.sources || [];
+    
+    // 默认选择所有新闻源
+    if (selectedNewsSources.value.length === 0) {
+      selectedNewsSources.value = availableNewsSources.value.map((s: any) => s.name);
+    }
+    
+    console.log('[Hot News] Loaded news sources:', availableNewsSources.value.length);
+    
+  } catch (error) {
+    console.error('[Hot News] Fetch sources error:', error);
+  } finally {
+    loadingNewsSources.value = false;
+  }
+};
+
+// 切换新闻源选择器显示
+const toggleNewsSourceSelector = async () => {
+  showNewsSourceSelector.value = !showNewsSourceSelector.value;
+  
+  // 如果打开选择器且还没有加载新闻源，则加载
+  if (showNewsSourceSelector.value && availableNewsSources.value.length === 0) {
+    await fetchNewsSources();
+  }
+};
+
+// 全选/取消全选新闻源
+const selectAllNewsSources = () => {
+  if (selectedNewsSources.value.length === availableNewsSources.value.length) {
+    selectedNewsSources.value = [];
+  } else {
+    selectedNewsSources.value = availableNewsSources.value.map((s: any) => s.name);
+  }
+};
+
+// 应用新闻源筛选
+const applyNewsSourceFilter = () => {
+  showNewsSourceSelector.value = false;
+  fetchLatestNews();
+};
+
+const viewNewsDetail = (news: any) => {
+  selectedNewsDetail.value = { ...news, fullContent: null };
+  showNewsDetail.value = true;
+};
+
+const closeNewsDetail = () => {
+  showNewsDetail.value = false;
+  selectedNewsDetail.value = null;
+  loadingNewsContent.value = false;
+};
+
+// 获取新闻全文内容
+const fetchNewsFullContent = async () => {
+  if (!selectedNewsDetail.value) return;
+  
+  const url = selectedNewsDetail.value.link || selectedNewsDetail.value.url;
+  if (!url) {
+    alert(currentLanguage.value === 'zh' ? '没有可用的链接' : 'No link available');
+    return;
+  }
+  
+  loadingNewsContent.value = true;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/fetch-content`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({ url })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch content');
+    }
+    
+    const data = await response.json();
+    
+    if (data.content) {
+      selectedNewsDetail.value = {
+        ...selectedNewsDetail.value,
+        fullContent: data.content,
+        description: data.content  // 也更新 description 以便保存到知识库
+      };
+    } else {
+      alert(currentLanguage.value === 'zh' ? '无法获取内容，请尝试访问原文链接' : 'Could not fetch content. Please try visiting the original link.');
+    }
+    
+  } catch (error) {
+    console.error('[News] Failed to fetch full content:', error);
+    alert(currentLanguage.value === 'zh' ? '获取全文失败，请尝试访问原文链接' : 'Failed to fetch content. Please try visiting the original link.');
+  } finally {
+    loadingNewsContent.value = false;
+  }
+};
+
+const viewTrendingDetail = (topic: any) => {
+  // 在模态框中显示详情
+  selectedNewsDetail.value = topic;
+  showNewsDetail.value = true;
+};
+
+const generatePostFromTrending = (topic: any) => {
+  // 使用标题和描述（全文）生成推文
+  const fullContent = `${topic.title}\n\n${topic.description || ''}`;
+  hotNewsTopic.value = fullContent.trim();
+  generateHotPost();
+};
+
+const generatePostFromNews = (news: any) => {
+  // 使用标题和描述（全文）生成推文
+  const fullContent = `${news.title}\n\n${news.description || ''}`;
+  hotNewsTopic.value = fullContent.trim();
+  generateHotPost();
+};
+
+const generatePostFromDetail = () => {
+  // 从详情模态框生成推文
+  if (selectedNewsDetail.value) {
+    const fullContent = `${selectedNewsDetail.value.title}\n\n${selectedNewsDetail.value.description || ''}`;
+    hotNewsTopic.value = fullContent.trim();
+    generateHotPost();
+  }
+};
+
+const saveNewsDetailToKB = async () => {
+  if (!selectedNewsDetail.value || savingNewsToKB.value) return;
+  
+  const detail = selectedNewsDetail.value;
+  savingNewsToKB.value = true;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/save-to-kb`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({
+        title: detail.title,
+        content: detail.description || detail.title,
+        url: detail.url || detail.link || '',
+        source: detail.source || '热点新闻',
+        published_date: detail.published_date || ''
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('保存失败');
+    }
+    
+    const data = await response.json();
+    alert(currentLanguage.value === 'en' ? 'Saved to knowledge base successfully!' : '已成功保存到知识库！');
+    console.log('[News Detail] Saved to KB:', data);
+    
+  } catch (error) {
+    console.error('[News Detail] Save to KB error:', error);
+    alert(currentLanguage.value === 'en' ? 'Failed to save' : '保存失败');
+  } finally {
+    savingNewsToKB.value = false;
+  }
+};
+
+const saveTrendingToKB = async (topic: any) => {
+  if (savingNewsToKB.value) return;
+  
+  savingNewsToKB.value = true;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/save-to-kb`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({
+        title: topic.title,
+        content: topic.description || topic.title,
+        url: topic.url || '',
+        source: '热点新闻',
+        published_date: topic.published_date || ''
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('保存失败');
+    }
+    
+    const data = await response.json();
+    alert(currentLanguage.value === 'en' ? 'Saved to knowledge base successfully!' : '已成功保存到知识库！');
+    console.log('[Trending] Saved to KB:', data);
+    
+  } catch (error) {
+    console.error('[Trending] Save to KB error:', error);
+    alert(currentLanguage.value === 'en' ? 'Failed to save' : '保存失败');
+  } finally {
+    savingNewsToKB.value = false;
+  }
+};
+
+const saveNewsToKB = async (news: any) => {
+  if (savingNewsToKB.value) return;
+  
+  savingNewsToKB.value = true;
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/hot-news/save-to-kb`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('vox_token')}`
+      },
+      body: JSON.stringify({
+        title: news.title,
+        content: news.description || news.title,
+        url: news.link || '',
+        source: news.source || '最新新闻',
+        published_date: news.published_date || ''
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('保存失败');
+    }
+    
+    alert(currentLanguage.value === 'en' ? '✅ Saved to knowledge base!' : '✅ 已保存到知识库！');
+    
+  } catch (error) {
+    console.error('[Hot News] Save to KB error:', error);
+    alert(currentLanguage.value === 'en' ? '❌ Failed to save' : '❌ 保存失败');
+  } finally {
+    savingNewsToKB.value = false;
+  }
+};
+
+// Email Marketing Functions
+const fetchEmailSubscribers = async () => {
+  emailLoading.value = true;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/email/subscribers`);
+    if (res.ok) emailSubscribers.value = await res.json();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    emailLoading.value = false;
+  }
+};
+
+const fetchEmailTemplates = async () => {
+  try {
+    console.log('📡 正在获取邮件模板...');
+    const res = await fetch(`${API_BASE_URL}/api/v1/email/templates`);
+    if (res.ok) {
+      const templates = await res.json();
+      emailTemplates.value = templates;
+      console.log('✅ 成功加载', templates.length, '个模板');
+      console.log('📋 模板列表:', templates.map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        contentLength: t.content?.length || 0
+      })));
+    } else {
+      console.error('❌ 获取模板失败:', res.status, res.statusText);
+    }
+  } catch (e) {
+    console.error('❌ 获取模板出错:', e);
+  }
+};
+
+const fetchEmailConfig = async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/email/config`);
+    if (res.ok) {
+      const data = await res.json();
+      Object.assign(emailConfigForm.value, data);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const handleEmailFileUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (!target.files?.length) return;
+  
+  const formData = new FormData();
+  formData.append('file', target.files[0]);
+  
+  emailLoading.value = true;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/email/subscribers/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    if (res.ok) {
+      alert(currentLanguage.value === 'zh' ? '导入成功' : 'Import successful');
+      fetchEmailSubscribers();
+    } else {
+      const err = await res.json();
+      alert(`${currentLanguage.value === 'zh' ? '导入失败' : 'Import failed'}: ${err.detail}`);
+    }
+  } catch (e) {
+    alert(currentLanguage.value === 'zh' ? '导入出错' : 'Import error');
+  } finally {
+    emailLoading.value = false;
+    target.value = '';
+  }
+};
+
+const deleteEmailSubscriber = async (id: number) => {
+  if (!confirm(currentLanguage.value === 'zh' ? '确定删除该用户吗？' : 'Delete this subscriber?')) return;
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/email/subscribers/${id}`, { method: 'DELETE' });
+    fetchEmailSubscribers();
+  } catch (e) {
+    alert(currentLanguage.value === 'zh' ? '删除失败' : 'Delete failed');
+  }
+};
+
+const openEmailTemplateModal = (tpl: any = null) => {
+  console.log('🚀 打开模板编辑器...');
+  console.log('📦 传入的模板数据:', tpl);
+  
+  editingEmailTemplate.value = tpl;
+  emailTemplateViewMode.value = 'visual'; // 默认打开可视化模式
+  
+  if (tpl) {
+    emailTemplateForm.value.name = tpl.name;
+    emailTemplateForm.value.subject = tpl.subject;
+    emailTemplateForm.value.content = tpl.content || '';
+    
+    console.log('✅ 模板已加载:', tpl.name);
+    console.log('✅ 模板 ID:', tpl.id);
+    console.log('✅ 主题:', tpl.subject);
+    console.log('✅ 内容长度:', tpl.content?.length || 0, '字符');
+    
+    if (tpl.content && tpl.content.length > 0) {
+      console.log('✅ 内容预览 (前 200 字符):', tpl.content.substring(0, 200) + '...');
+      console.log('📝 emailTemplateForm.value.content 已设置:', emailTemplateForm.value.content.length, '字符');
+    } else {
+      console.warn('⚠️ 模板内容为空！');
+    }
+  } else {
+    emailTemplateForm.value.name = '';
+    emailTemplateForm.value.subject = '';
+    emailTemplateForm.value.content = '';
+    console.log('📝 创建新模板');
+  }
+  
+  showEmailTemplateModal.value = true;
+  console.log('✅ 模态框已打开');
+  
+  // 延迟初始化 Quill，确保 DOM 已渲染
+  nextTick(() => {
+    console.log('⏳ nextTick: DOM 应该已更新');
+    setTimeout(() => {
+      console.log('⏰ 延迟 100ms 后开始初始化 Quill...');
+      initQuillEditor();
+    }, 100);
+  });
+};
+
+const initQuillEditor = () => {
+  console.log('🔧 initQuillEditor 被调用');
+  console.log('📝 当前 emailTemplateForm.value.content 长度:', emailTemplateForm.value.content?.length || 0);
+  
+  // Destroy existing editor if any
+  if (quillEditor) {
+    console.log('🗑️ 清理旧的 Quill 编辑器');
+    try {
+      // 移除事件监听器
+      quillEditor.off('text-change');
+      // 不要清空整个父节点，只重置编辑器本身
+      quillEditor = null;
+    } catch (e) {
+      console.warn('⚠️ Error destroying previous Quill editor:', e);
+      quillEditor = null;
+    }
+  }
+  
+  const editorElement = document.getElementById('quill-editor');
+  if (!editorElement) {
+    console.error('❌ Quill editor element (#quill-editor) not found!');
+    console.log('🔍 当前 emailTemplateViewMode:', emailTemplateViewMode.value);
+    console.log('🔍 检查是否在 DOM 中:', document.body.contains(document.getElementById('quill-editor')));
+    
+    // 如果找不到元素，等待一下再试
+    setTimeout(() => {
+      const retryElement = document.getElementById('quill-editor');
+      if (retryElement) {
+        console.log('✅ 重试后找到元素，继续初始化...');
+        initQuillEditor();
+      } else {
+        console.error('❌ 重试后仍未找到元素');
+      }
+    }, 200);
+    return;
+  }
+  
+  // 检查元素是否可见
+  const isVisible = editorElement.offsetParent !== null;
+  console.log('✅ 找到编辑器元素:', editorElement);
+  console.log('👁️ 元素是否可见:', isVisible);
+  console.log('📏 元素尺寸:', editorElement.offsetWidth, 'x', editorElement.offsetHeight);
+  
+  if (!isVisible) {
+    console.warn('⚠️ 元素不可见，等待 100ms 后重试...');
+    setTimeout(() => initQuillEditor(), 100);
+    return;
+  }
+  
+  console.log('🔧 正在初始化 Quill 编辑器...');
+  
+  // Clear the element
+  editorElement.innerHTML = '';
+  
+  // Import Quill dynamically
+  import('quill').then((Quill) => {
+    const QuillConstructor = Quill.default || Quill;
+    console.log('📦 Quill 库已加载');
+    
+    quillEditor = new QuillConstructor('#quill-editor', {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'header': [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+          [{ 'align': [] }],
+          ['link', 'image'],
+          ['clean']
+        ],
+        clipboard: {
+          matchVisual: true // 保持粘贴内容的格式
+        }
+      },
+      placeholder: currentLanguage.value === 'zh' ? '在此编辑邮件内容...' : 'Edit email content here...'
+    });
+    
+    console.log('✅ Quill 编辑器实例创建成功');
+    console.log('📋 Quill 编辑器对象:', quillEditor);
+    
+    // 强制更新 Quill 布局（解决从 preview 切换回来时的显示问题）
+    try {
+      if (typeof quillEditor.update === 'function') {
+        quillEditor.update();
+        console.log('🔄 已强制更新 Quill 布局');
+      }
+    } catch (e) {
+      console.warn('⚠️ 更新布局失败:', e);
+    }
+    
+    // Wait for Quill to be fully initialized before setting content
+    setTimeout(() => {
+      console.log('⏰ 准备加载内容到 Quill...');
+      console.log('📝 emailTemplateForm.value.content:', emailTemplateForm.value.content ? `${emailTemplateForm.value.content.length} 字符` : '空');
+      console.log('📋 quillEditor 对象:', quillEditor ? '存在' : '不存在');
+      
+      if (emailTemplateForm.value.content && quillEditor) {
+        console.log('🚀 开始加载内容...');
+        
+        // 提取 body 内容（Quill 只接受 HTML 片段，不接受完整的 HTML 文档）
+        let contentToLoad = emailTemplateForm.value.content;
+        const bodyMatch = emailTemplateForm.value.content.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        if (bodyMatch && bodyMatch[1]) {
+          contentToLoad = bodyMatch[1];
+          console.log('📄 提取了 <body> 标签内的内容');
+          console.log('📝 提取后的内容长度:', contentToLoad.length);
+        } else {
+          console.log('ℹ️ 未找到 <body> 标签，使用原始内容');
+        }
+        
+        try {
+          // 暂时移除 text-change 监听器，避免在加载时被触发
+          const loadingFlag = { isLoading: true };
+          (quillEditor as any)._loadingFlag = loadingFlag;
+          
+          // 使用 pasteHTML 方法（最适合加载完整 HTML）
+          quillEditor.clipboard.dangerouslyPasteHTML(contentToLoad);
+          console.log('✅ 内容已加载到 Quill (使用 pasteHTML)');
+          console.log('📝 原始内容长度:', emailTemplateForm.value.content.length);
+          console.log('📋 Quill root 内容长度:', quillEditor.root.innerHTML.length);
+          console.log('👁️ Quill 内容预览 (前 300 字符):', quillEditor.root.innerHTML.substring(0, 300) + '...');
+          
+          // 标记加载完成并强制刷新布局
+          setTimeout(() => {
+            loadingFlag.isLoading = false;
+            console.log('✅ 内容加载完成，可以开始编辑');
+            
+            // 最后一次强制更新布局，确保内容正确显示
+            try {
+              if (quillEditor && typeof quillEditor.update === 'function') {
+                quillEditor.update();
+                console.log('🔄 内容加载后已刷新 Quill 布局');
+              }
+              // 滚动到顶部，确保用户看到内容
+              if (quillEditor && quillEditor.root) {
+                quillEditor.root.scrollTop = 0;
+                console.log('📜 已滚动到编辑器顶部');
+              }
+            } catch (e) {
+              console.warn('⚠️ 刷新布局时出错:', e);
+            }
+          }, 300);
+        } catch (err) {
+          console.error('❌ 加载内容失败:', err);
+        }
+      } else if (!emailTemplateForm.value.content) {
+        console.log('ℹ️ 内容为空，这是一个新模板');
+      } else if (!quillEditor) {
+        console.error('❌ quillEditor 对象不存在！');
+      }
+    }, 200);
+    
+    // Listen for content changes (忽略初始加载期间的变化)
+    quillEditor.on('text-change', () => {
+      if (quillEditor && quillEditor.root) {
+        // 检查是否正在加载
+        const loadingFlag = (quillEditor as any)._loadingFlag;
+        if (loadingFlag && loadingFlag.isLoading) {
+          console.log('⏳ 正在加载内容，忽略此次变化');
+          return;
+        }
+        
+        // 获取 body 内容
+        const bodyContent = quillEditor.root.innerHTML;
+        
+        // 如果原始内容有完整的 HTML 结构，保持它
+        if (emailTemplateForm.value.content.includes('<html>')) {
+          // 替换 body 内容，保持 head 不变
+          emailTemplateForm.value.content = emailTemplateForm.value.content.replace(
+            /<body[^>]*>[\s\S]*<\/body>/i,
+            `<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4;">\n${bodyContent}\n</body>`
+          );
+          console.log('📝 内容已更新（保持 HTML 结构），body 长度:', bodyContent.length);
+        } else {
+          // 如果是片段，直接保存
+          emailTemplateForm.value.content = bodyContent;
+          console.log('📝 内容已更新，长度:', bodyContent.length);
+        }
+      }
+    });
+  }).catch(err => {
+    console.error('❌ Failed to load Quill editor:', err);
+    alert(currentLanguage.value === 'zh' 
+      ? '富文本编辑器加载失败，请刷新页面重试' 
+      : 'Failed to load rich text editor, please refresh the page');
+  });
+};
+
+const switchEmailTemplateViewMode = (mode: 'visual' | 'code' | 'preview') => {
+  console.log(`🔄 切换到 ${mode} 模式，当前模式: ${emailTemplateViewMode.value}`);
+  
+  // Save content from current editor before switching
+  if (emailTemplateViewMode.value === 'visual' && quillEditor) {
+    try {
+      // 获取 body 内容
+      const bodyContent = quillEditor.root.innerHTML;
+      
+      // 如果原始内容有完整的 HTML 结构，保持它
+      if (emailTemplateForm.value.content.includes('<html>')) {
+        // 替换 body 内容，保持 head 不变
+        emailTemplateForm.value.content = emailTemplateForm.value.content.replace(
+          /<body[^>]*>[\s\S]*<\/body>/i,
+          `<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4;">\n${bodyContent}\n</body>`
+        );
+        console.log('💾 已保存 Visual 模式的内容（保持 HTML 结构）, body 长度:', bodyContent.length);
+      } else {
+        // 如果是片段，直接保存
+        emailTemplateForm.value.content = bodyContent;
+        console.log('💾 已保存 Visual 模式的内容，长度:', bodyContent.length);
+      }
+    } catch (e) {
+      console.warn('⚠️ 保存 Visual 模式内容时出错:', e);
+    }
+  }
+  
+  // 切换模式前先保存当前状态
+  const previousMode = emailTemplateViewMode.value;
+  emailTemplateViewMode.value = mode;
+  
+  // Initialize Quill when switching to visual mode
+  if (mode === 'visual') {
+    console.log('🔧 准备初始化 Visual 模式...');
+    console.log('📝 当前 emailTemplateForm.value.content 长度:', emailTemplateForm.value.content?.length || 0);
+    console.log('📝 从哪个模式切换过来:', previousMode);
+    
+    // 如果从 preview 切换过来，需要更长的延迟确保 DOM 完全准备好
+    const delay = previousMode === 'preview' ? 300 : 150;
+    console.log(`⏱️ 将在 ${delay}ms 后初始化 Quill...`);
+    
+    nextTick(() => {
+      setTimeout(() => {
+        console.log('⏰ 开始初始化 Quill 编辑器...');
+        initQuillEditor();
+      }, delay);
+    });
+  }
+  
+  // Update preview iframe when switching to preview mode
+  if (mode === 'preview') {
+    nextTick(() => {
+      setTimeout(() => {
+        if (previewIframe.value && emailTemplateForm.value.content) {
+          const iframe = previewIframe.value;
+          // 如果 content 包含 <html>，直接使用；否则包装一下
+          const previewContent = emailTemplateForm.value.content.includes('<html>') 
+            ? emailTemplateForm.value.content 
+            : `<html><head><meta charset="UTF-8"></head><body>${emailTemplateForm.value.content}</body></html>`;
+          iframe.srcdoc = previewContent;
+          console.log('✅ 预览内容已加载，长度:', emailTemplateForm.value.content.length, '字符');
+        } else if (previewIframe.value) {
+          const emptyContent = `
+            <div style="text-align: center; padding: 60px 20px; color: #999; font-family: Arial, sans-serif;">
+              <svg style="width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p style="font-size: 16px; margin: 0;">${currentLanguage.value === 'zh' ? '暂无内容' : 'No content'}</p>
+              <p style="font-size: 14px; margin: 8px 0 0 0; opacity: 0.7;">${currentLanguage.value === 'zh' ? '请在可视化或代码模式下编辑内容' : 'Please edit content in Visual or Code mode'}</p>
+            </div>
+          `;
+          previewIframe.value.srcdoc = emptyContent;
+          console.log('⚠️ 预览内容为空');
+        } else {
+          console.error('❌ 预览 iframe 未找到');
+        }
+      }, 100);
+    });
+  }
+};
+
+const closeEmailTemplateModal = () => {
+  // Save content before closing if in visual mode
+  if (emailTemplateViewMode.value === 'visual' && quillEditor) {
+    try {
+      emailTemplateForm.value.content = quillEditor.root.innerHTML;
+      console.log('💾 关闭前已保存内容');
+    } catch (e) {
+      console.warn('⚠️ 关闭前保存内容时出错:', e);
+    }
+  }
+  
+  // Clean up Quill editor
+  if (quillEditor) {
+    try {
+      quillEditor = null;
+    } catch (e) {
+      console.warn('⚠️ 清理编辑器时出错:', e);
+    }
+  }
+  
+  showEmailTemplateModal.value = false;
+  emailTemplateViewMode.value = 'visual';
+};
+
+const saveEmailTemplate = async () => {
+  // Save content from Quill editor if in visual mode
+  if (emailTemplateViewMode.value === 'visual' && quillEditor) {
+    emailTemplateForm.value.content = quillEditor.root.innerHTML;
+  }
+  
+  const url = editingEmailTemplate.value 
+    ? `${API_BASE_URL}/api/v1/email/templates/${editingEmailTemplate.value.id}`
+    : `${API_BASE_URL}/api/v1/email/templates`;
+  const method = editingEmailTemplate.value ? 'PUT' : 'POST';
+  
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(emailTemplateForm.value)
+    });
+    if (res.ok) {
+      closeEmailTemplateModal();
+      fetchEmailTemplates();
+    } else {
+      alert(currentLanguage.value === 'zh' ? '保存失败' : 'Save failed');
+    }
+  } catch (e) {
+    alert(currentLanguage.value === 'zh' ? '保存出错' : 'Save error');
+  }
+};
+
+const deleteEmailTemplate = async (id: number) => {
+  if (!confirm(currentLanguage.value === 'zh' ? '确定删除该模板吗？' : 'Delete this template?')) return;
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/email/templates/${id}`, { method: 'DELETE' });
+    fetchEmailTemplates();
+  } catch (e) {
+    alert(currentLanguage.value === 'zh' ? '删除失败' : 'Delete failed');
+  }
+};
+
+const applySmtpPreset = (event: Event) => {
+  const target = event.target as HTMLSelectElement;
+  const preset = target.value;
+  
+  console.log('📧 应用 SMTP 预设:', preset);
+  
+  if (!preset) return;
+  
+  const smtpPresets: Record<string, any> = {
+    gmail: {
+      smtp_server: 'smtp.gmail.com',
+      smtp_port: 587,
+      use_tls: true,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：Gmail 需要使用应用专用密码，不能使用账户密码。请访问 Google 账户安全设置生成应用专用密码。' 
+        : 'Note: Gmail requires an app-specific password. Visit Google Account Security settings to generate one.'
+    },
+    outlook: {
+      smtp_server: 'smtp-mail.outlook.com',
+      smtp_port: 587,
+      use_tls: true,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：适用于 Outlook.com 和 Hotmail.com 邮箱。\n\n⚠️ Outlook 可能需要：\n• 启用"允许不够安全的应用"或使用应用密码\n• 检查账户设置中的 SMTP 权限\n• 测试邮件可能会进入垃圾邮件文件夹' 
+        : 'Note: For Outlook.com and Hotmail.com email addresses.\n\n⚠️ Outlook may require:\n• Enable "Allow less secure apps" or use app password\n• Check SMTP permissions in account settings\n• Test email may go to spam folder'
+    },
+    office365: {
+      smtp_server: 'smtp.office365.com',
+      smtp_port: 587,
+      use_tls: true,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：适用于 Office 365 企业邮箱。' 
+        : 'Note: For Office 365 business email accounts.'
+    },
+    '163': {
+      smtp_server: 'smtp.163.com',
+      smtp_port: 465,
+      use_tls: false,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：163 邮箱需要在邮箱设置中开启 SMTP 服务并使用授权码作为密码。' 
+        : 'Note: Enable SMTP service in 163 mailbox settings and use authorization code as password.'
+    },
+    qq: {
+      smtp_server: 'smtp.qq.com',
+      smtp_port: 587,
+      use_tls: true,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：QQ 邮箱需要在设置中开启 SMTP 服务并使用授权码作为密码。' 
+        : 'Note: Enable SMTP service in QQ Mail settings and use authorization code as password.'
+    },
+    yahoo: {
+      smtp_server: 'smtp.mail.yahoo.com',
+      smtp_port: 587,
+      use_tls: true,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：Yahoo 可能需要使用应用专用密码。' 
+        : 'Note: Yahoo may require an app-specific password.'
+    },
+    icloud: {
+      smtp_server: 'smtp.mail.me.com',
+      smtp_port: 587,
+      use_tls: true,
+      hint: currentLanguage.value === 'zh' 
+        ? '提示：iCloud 需要使用应用专用密码。请访问 appleid.apple.com 生成。' 
+        : 'Note: iCloud requires an app-specific password. Generate one at appleid.apple.com.'
+    }
+  };
+  
+  const config = smtpPresets[preset];
+  if (config) {
+    emailConfigForm.value.smtp_server = config.smtp_server;
+    emailConfigForm.value.smtp_port = config.smtp_port;
+    emailConfigForm.value.use_tls = config.use_tls;
+    
+    // ⚠️ 自动同步：如果已填写用户名，发件人邮箱应该和用户名一致
+    if (emailConfigForm.value.smtp_username) {
+      emailConfigForm.value.sender_email = emailConfigForm.value.smtp_username;
+      console.log('✅ 自动同步发件人邮箱为:', emailConfigForm.value.sender_email);
+    }
+    
+    console.log('✅ 已应用预设配置:', config);
+    
+    // 显示提示信息
+    if (config.hint) {
+      alert(config.hint + 
+        (currentLanguage.value === 'zh' 
+          ? '\n\n⚠️ 重要提示：\n• 发件人邮箱必须和用户名（邮箱地址）一致！\n• 否则邮件会发送失败！'
+          : '\n\n⚠️ Important:\n• Sender email MUST match username (email address)!\n• Otherwise emails will fail!'));
+    }
+    
+    // 重置选择器
+    target.value = '';
+  }
+};
+
+const testSmtpConnection = async () => {
+  console.log('🧪 测试 SMTP 连接...');
+  
+  // 验证必填字段
+  if (!emailConfigForm.value.smtp_server || !emailConfigForm.value.smtp_username || 
+      !emailConfigForm.value.smtp_password || !emailConfigForm.value.sender_email) {
+    return {
+      success: false,
+      message: '请填写所有必填字段：服务器、用户名、密码、发件人邮箱',
+      message_en: 'Please fill in all required fields: server, username, password, sender email'
+    };
+  }
+  
+  try {
+    // 方案：先保存配置（临时），然后使用现有的发送测试邮件功能
+    // 1. 保存配置
+    const saveRes = await fetch(`${API_BASE_URL}/api/v1/email/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(emailConfigForm.value)
+    });
+    
+    if (!saveRes.ok) {
+      return {
+        success: false,
+        message: '保存配置失败',
+        message_en: 'Failed to save configuration'
+      };
+    }
+    
+    // 2. 获取第一个模板（用于测试）
+    const templatesRes = await fetch(`${API_BASE_URL}/api/v1/email/templates`);
+    const templates = await templatesRes.json();
+    
+    if (templates.length === 0) {
+      return {
+        success: false,
+        message: '没有可用的邮件模板，无法测试',
+        message_en: 'No email templates available for testing'
+      };
+    }
+    
+    // 3. 发送测试邮件到发件人自己的邮箱
+    const sendRes = await fetch(`${API_BASE_URL}/api/v1/email/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template_id: templates[0].id,
+        type: 'test',
+        test_email: emailConfigForm.value.sender_email
+      })
+    });
+    
+    const sendResult = await sendRes.json();
+    console.log('🧪 发送结果:', sendResult);
+    
+    if (sendRes.ok && sendResult.success !== undefined) {
+      if (sendResult.success > 0 || sendResult.total > 0) {
+        return {
+          success: true,
+          message: `SMTP 连接测试成功！测试邮件已发送到 ${emailConfigForm.value.sender_email}`,
+          message_en: `SMTP connection test successful! Test email sent to ${emailConfigForm.value.sender_email}`
+        };
+      }
+    }
+    
+    // 如果响应格式不同，检查是否有错误
+    if (sendResult.detail) {
+      return {
+        success: false,
+        message: `测试失败：${sendResult.detail}`,
+        message_en: `Test failed: ${sendResult.detail}`,
+        error_detail: sendResult.detail
+      };
+    }
+    
+    // 默认成功（发送API没有返回错误）
+    return {
+      success: true,
+      message: `测试邮件已发送到 ${emailConfigForm.value.sender_email}`,
+      message_en: `Test email sent to ${emailConfigForm.value.sender_email}`
+    };
+    
+  } catch (e) {
+    console.error('❌ 测试连接出错:', e);
+    return {
+      success: false,
+      message: currentLanguage.value === 'zh' ? `测试连接时发生错误：${e}` : `Error during connection test: ${e}`,
+      message_en: `Error during connection test: ${e}`,
+      error_detail: String(e)
+    };
+  }
+};
+
+const handleTestConnection = async () => {
+  if (!emailConfigForm.value.smtp_server || !emailConfigForm.value.smtp_username || 
+      !emailConfigForm.value.smtp_password || !emailConfigForm.value.sender_email) {
+    alert(currentLanguage.value === 'zh' 
+      ? '❌ 请填写所有必填字段：服务器、用户名、密码、发件人邮箱' 
+      : '❌ Please fill in all required fields: server, username, password, sender email');
+    return;
+  }
+  
+  // ⚠️ 关键验证：发件人邮箱必须和用户名一致（特别是 Gmail 和 Outlook）
+  if (emailConfigForm.value.sender_email !== emailConfigForm.value.smtp_username) {
+    const fixMsg = currentLanguage.value === 'zh'
+      ? `⚠️ 配置错误！\n\n发件人邮箱和用户名不一致：\n• 用户名: ${emailConfigForm.value.smtp_username}\n• 发件人: ${emailConfigForm.value.sender_email}\n\n大多数邮件服务器（Gmail、Outlook 等）要求发件人邮箱和登录用户名一致，否则邮件会发送失败！\n\n是否自动修正为：${emailConfigForm.value.smtp_username}？`
+      : `⚠️ Configuration Error!\n\nSender email does not match username:\n• Username: ${emailConfigForm.value.smtp_username}\n• Sender: ${emailConfigForm.value.sender_email}\n\nMost email servers (Gmail, Outlook, etc.) require sender email to match username, or emails will fail!\n\nAuto-correct to: ${emailConfigForm.value.smtp_username}?`;
+    
+    if (confirm(fixMsg)) {
+      emailConfigForm.value.sender_email = emailConfigForm.value.smtp_username;
+      alert(currentLanguage.value === 'zh' 
+        ? `✅ 已自动修正！\n\n发件人邮箱已更改为：${emailConfigForm.value.sender_email}\n\n请再次点击"测试连接"。` 
+        : `✅ Auto-corrected!\n\nSender email changed to: ${emailConfigForm.value.sender_email}\n\nPlease click "Test Connection" again.`);
+      return;
+    } else {
+      alert(currentLanguage.value === 'zh'
+        ? '⚠️ 建议修正配置后再测试，否则很可能无法发送邮件！'
+        : '⚠️ Please correct the configuration before testing, or emails may fail!');
+      return;
+    }
+  }
+  
+  const confirmMsg = currentLanguage.value === 'zh'
+    ? `🧪 测试 SMTP 连接\n\n将会：\n1. 保存您的配置\n2. 发送一封测试邮件到：${emailConfigForm.value.sender_email}\n3. 验证连接是否成功\n\n确定继续吗？`
+    : `🧪 Test SMTP Connection\n\nWill:\n1. Save your configuration\n2. Send a test email to: ${emailConfigForm.value.sender_email}\n3. Verify the connection\n\nContinue?`;
+  
+  if (!confirm(confirmMsg)) {
+    return;
+  }
+  
+  emailSending.value = true;
+  
+  const result = await testSmtpConnection();
+  
+  emailSending.value = false;
+  
+  if (result.success) {
+    alert(`✅ ${currentLanguage.value === 'zh' ? result.message : result.message_en}\n\n` +
+          `${currentLanguage.value === 'zh' ? '📬 请检查邮箱（可能需要 1-2 分钟）：' : '📬 Please check your inbox (may take 1-2 minutes):'} ${emailConfigForm.value.sender_email}\n\n` +
+          `${currentLanguage.value === 'zh' ? '⚠️ 如果没收到邮件：' : '⚠️ If you did not receive the email:'}\n` +
+          `${currentLanguage.value === 'zh' ? '• 检查垃圾邮件/垃圾箱文件夹' : '• Check spam/junk folder'}\n` +
+          `${currentLanguage.value === 'zh' ? '• 等待几分钟（某些服务器较慢）' : '• Wait a few minutes (some servers are slow)'}\n` +
+          `${currentLanguage.value === 'zh' ? '• 检查发件人邮箱地址是否正确' : '• Verify sender email address is correct'}\n\n` +
+          `${currentLanguage.value === 'zh' ? '🔧 Outlook 用户特别注意：' : '🔧 Outlook users note:'}\n` +
+          `${currentLanguage.value === 'zh' ? '• 可能需要应用密码而不是账户密码' : '• May need app password instead of account password'}\n` +
+          `${currentLanguage.value === 'zh' ? '• 访问：account.microsoft.com/security' : '• Visit: account.microsoft.com/security'}`);
+  } else {
+    const errorMsg = currentLanguage.value === 'zh' ? result.message : result.message_en;
+    alert(`❌ ${errorMsg}\n\n${currentLanguage.value === 'zh' ? '请检查您的配置：' : 'Please check your configuration:'}\n` +
+          `\n${currentLanguage.value === 'zh' ? '✓ 服务器地址和端口是否正确' : '✓ Server address and port are correct'}` +
+          `\n${currentLanguage.value === 'zh' ? '✓ 用户名（完整邮箱地址）是否正确' : '✓ Username (full email address) is correct'}` +
+          `\n${currentLanguage.value === 'zh' ? '✓ 密码或授权码是否正确' : '✓ Password or authorization code is correct'}` +
+          `\n${currentLanguage.value === 'zh' ? '✓ TLS 设置是否正确' : '✓ TLS setting is correct'}` +
+          `\n\n${currentLanguage.value === 'zh' ? '📧 Outlook 用户：' : '📧 Outlook users:'}` +
+          `\n${currentLanguage.value === 'zh' ? '• 需要应用密码，不能用账户密码' : '• Need app password, not account password'}` +
+          `\n${currentLanguage.value === 'zh' ? '• 生成地址：account.microsoft.com/security' : '• Generate at: account.microsoft.com/security'}` +
+          (result.error_detail ? `\n\n${currentLanguage.value === 'zh' ? '详细错误：' : 'Details:'}\n${result.error_detail}` : ''));
+  }
+};
+
+const saveEmailConfig = async () => {
+  // 直接保存配置（测试功能已经通过发送测试邮件实现）
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/email/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(emailConfigForm.value)
+    });
+    if (res.ok) {
+      alert(currentLanguage.value === 'zh' ? '配置保存成功' : 'Configuration saved');
+    } else {
+      alert(currentLanguage.value === 'zh' ? '保存失败' : 'Save failed');
+    }
+  } catch (e) {
+    alert(currentLanguage.value === 'zh' ? '保存出错' : 'Save error');
+  }
+};
+
+const sendEmail = async () => {
+  if (!emailSendForm.value.template_id) return;
+  
+  emailSending.value = true;
+  try {
+    const payload: any = {
+      template_id: emailSendForm.value.template_id
+    };
+    
+    if (emailSendForm.value.type === 'test') {
+      if (!emailSendForm.value.test_email) {
+        alert(currentLanguage.value === 'zh' ? '请输入测试邮箱' : 'Please enter test email');
+        emailSending.value = false;
+        return;
+      }
+      payload.test_email = emailSendForm.value.test_email;
+    }
+    
+    const res = await fetch(`${API_BASE_URL}/api/v1/email/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (res.ok) {
+      alert(emailSendForm.value.type === 'test' 
+        ? (currentLanguage.value === 'zh' ? '测试邮件已发送' : 'Test email sent')
+        : (currentLanguage.value === 'zh' ? '批量发送任务已提交后台' : 'Batch send task submitted'));
+    } else {
+      const err = await res.json();
+      alert(`${currentLanguage.value === 'zh' ? '发送失败' : 'Send failed'}: ${err.detail}`);
+    }
+  } catch (e) {
+    alert(currentLanguage.value === 'zh' ? '发送出错' : 'Send error');
+  } finally {
+    emailSending.value = false;
+  }
+};
+
 onMounted(() => {
     // Fetch LLM config from backend
     fetchLLMConfig();
@@ -3389,6 +8849,16 @@ onMounted(() => {
     // Fetch academic history for the History section
     fetchAcademicHistory();
     
+    // Load search history from localStorage
+    const savedSearchHistory = localStorage.getItem('vox_search_history');
+    if (savedSearchHistory) {
+      try {
+        searchHistory.value = JSON.parse(savedSearchHistory);
+      } catch (e) {
+        console.error('Failed to load search history:', e);
+      }
+    }
+    
     // Initial fetch based on active tab    
     // Set User Info
     const storedName = localStorage.getItem('vox_display_name') || localStorage.getItem('vox_username');
@@ -3398,6 +8868,11 @@ onMounted(() => {
     }
 });
 </script>
+
+<style>
+/* Quill Editor Styles */
+@import 'quill/dist/quill.snow.css';
+</style>
 
 <style scoped>
 /* Custom Scrollbar for Webkit */
@@ -3573,5 +9048,114 @@ onMounted(() => {
   margin-left: 0.25rem;
   margin-right: 0.25rem;
   border: 1px solid #a78bfa;
+}
+
+/* Clickable evidence and asset badges */
+.script-content :deep(.clickable-evidence),
+.script-content :deep(.clickable-asset) {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.script-content :deep(.clickable-evidence:hover) {
+  background: linear-gradient(135deg, #fde68a 0%, #fbbf24 100%);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+}
+
+.script-content :deep(.clickable-asset:hover) {
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.4);
+}
+
+/* Asset reference style (D1-FIG-1, D2-TAB-1) */
+.script-content :deep(.asset-ref) {
+  display: inline-block;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  color: #4338ca;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: monospace;
+  border: 1px solid #818cf8;
+}
+
+.script-content :deep(.asset-ref:hover) {
+  background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(129, 140, 248, 0.4);
+}
+
+/* Model Select Dropdown - 确保下拉菜单完整显示 */
+.model-select-wrapper {
+  /* 确保下拉菜单不被父容器截断 */
+  position: relative;
+  z-index: 1000;
+}
+
+.model-select {
+  /* 强制浏览器显示原生下拉菜单，最大高度设置为可滚动 */
+  -webkit-appearance: menulist;
+  -moz-appearance: menulist;
+  appearance: menulist;
+  max-height: 300px;
+}
+
+/* 在打开时增加 z-index，确保在所有元素之上 */
+.model-select:focus {
+  z-index: 9999;
+  position: relative;
+}
+
+/* 优化选项样式 */
+.model-select option {
+  padding: 10px 12px;
+  background: white;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.model-select option:hover {
+  background: #f1f5f9;
+}
+
+.model-select option:checked {
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+.model-select option:disabled {
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
+/* Figure/Image container styles for Final Version */
+.script-content :deep(.figure-container) {
+  margin: 24px 0;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.script-content :deep(.figure-image) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  display: block;
+}
+
+.script-content :deep(.figure-caption) {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #64748b;
+  font-style: italic;
+  text-align: center;
 }
 </style>
